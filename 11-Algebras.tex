@@ -1,0 +1,789 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{10}
+
+\chapter{代数}
+
+代数的本质是对表达式进行形式化操作。但什么是表达式，我们又如何操作它们呢？
+
+首先，观察像 $2 (x + y)$ 或 $a x^2 + b x + c$ 这样的代数表达式，我们会发现它们有无限多个。虽然构建它们的规则是有限的，但这些规则可以以无限多种组合方式使用。这表明这些规则是\emph{递归}使用的。
+
+在编程中，表达式几乎等同于（解析）树。考虑以下算术表达式的简单示例：
+\begin{haskell}
+data Expr = Val Int 
+          | Plus Expr Expr
+\end{haskell}
+这是一个构建树的配方。我们首先使用 \hask{Val} 构造函数构建小树。然后我们将这些幼苗种植到节点中，依此类推。
+\begin{haskell}
+e2 = Val 2
+e3 = Val 3
+e5 = Plus e2 e3
+e7 = Plus e5 e2
+\end{haskell}
+
+这样的递归定义在编程语言中非常有效。问题是，每个新的递归数据结构都需要自己的函数库来操作它。
+
+从类型理论的角度来看，我们已经能够通过提供特定的引入和消除规则来定义递归类型，例如自然数或列表。我们需要的是更一般的东西，一种从更简单的可插拔组件生成任意递归类型的程序。
+
+在处理递归数据结构时，有两个正交的关注点。一个是递归的机制，另一个是可插拔的组件。
+
+我们知道如何处理递归：我们假设我们知道如何构建小树。然后我们使用递归步骤将这些树种植到节点中以构建更大的树。
+
+范畴论告诉我们如何形式化这种不精确的描述。
+
+\section{自函子的代数}
+
+将较小的树种植到节点中的想法要求我们形式化具有“洞”的数据结构的含义——即“容器的容器”。这正是函子的用途。因为我们希望递归地使用这些函子，所以它们必须是\emph{自}函子。
+
+例如，我们之前示例中的自函子将由以下数据结构定义，其中 \hask{x} 标记了位置：
+\begin{haskell}
+data ExprF x = ValF Int 
+             | PlusF x x
+\end{haskell}
+关于所有可能表达式形状的信息被抽象为一个单一的函子。
+
+在定义代数时，另一个重要的信息是评估表达式的配方。这也可以使用相同的自函子进行编码。
+
+递归地思考，假设我们知道如何评估较大表达式的所有子树。那么剩下的步骤就是将这些结果插入到顶层节点并对其进行评估。
+
+例如，假设函子中的 \hask{x} 被替换为整数——子树评估的结果。很明显，在最后一步我们应该做什么。如果树的顶部只是一个叶子 \hask{ValF}（这意味着没有子树需要评估），我们将只返回其中存储的整数。如果它是一个 \hask{PlusF} 节点，我们将把其中的两个整数相加。这个配方可以编码为：
+\begin{haskell}
+eval :: ExprF Int -> Int
+eval (ValF n)    = n
+eval (PlusF m n) = m + n
+\end{haskell}
+
+我们基于常识做出了一些看似显而易见的假设。例如，由于节点被称为 \hask{PlusF}，我们假设我们应该将两个数字相加。但乘法或减法同样适用。
+
+由于叶子 \hask{ValF} 包含一个整数，我们假设表达式应该评估为一个整数。但同样合理的评估器可以通过将表达式转换为字符串来美化打印它。这个评估器使用连接而不是加法：
+\begin{haskell}
+pretty :: ExprF String -> String
+pretty (ValF n)    = show n
+pretty (PlusF s t) = s ++ " + " ++ t
+\end{haskell}
+
+事实上，有无限多个评估器，有些合理，有些则不太合理，但我们不应该进行评判。任何目标类型的选择和任何评估器的选择都应该是同样有效的。这导致了以下定义：
+
+自函子 $F$ 的\emph{代数}是一个对 $(c, \alpha)$。对象 $c$ 被称为代数的\emph{载体}，评估器 $\alpha \colon F c \to c$ 被称为\emph{结构映射}。
+
+在 Haskell 中，给定函子 \hask{f}，我们定义：
+\begin{haskell}
+type Algebra f c = f c -> c
+\end{haskell}
+
+请注意，评估器\emph{不是}一个多态函数。它是针对特定类型 \hask{c} 的特定函数选择。对于给定的类型，可能有多种载体类型的选择，也可能有许多不同的评估器。它们都定义了不同的代数。
+
+我们之前为 \hask{ExprF} 定义了两个代数。这个以 \hask{Int} 为载体：
+\begin{haskell}
+eval :: Algebra ExprF Int
+eval (ValF n)   = n
+eval (PlusF m n) = m + n
+\end{haskell}
+而这个以 \hask{String} 为载体：
+\begin{haskell}
+pretty :: Algebra ExprF String
+pretty (ValF n)   = show n
+pretty (PlusF s t) = s ++ " + " ++ t
+\end{haskell}
+
+\section{代数范畴}
+
+对于一个给定的自函子 $F$，其代数构成一个范畴。该范畴中的箭头是代数同态（algebra morphism），即它们载体对象之间的结构保持箭头。
+
+在这种情况下，保持结构意味着箭头必须与两个结构映射交换。这正是函子性发挥作用的地方。为了从一个结构映射切换到另一个结构映射，我们必须能够提升它们载体之间的箭头。
+
+给定一个自函子 $F$，两个代数 $(a, \alpha)$ 和 $(b, \beta)$ 之间的\emph{代数同态}是一个箭头 $f \colon a \to b$，使得以下图表交换：
+\[
+ \begin{tikzcd}
+ F a 
+ \arrow[r, "F f"]
+ \arrow[d, "\alpha"]
+ & F b
+\arrow[d, "\beta"]
+ \\
+ a
+ \arrow[r, "f"]
+ & b
+  \end{tikzcd}
+\]
+换句话说，以下等式必须成立：
+\[f \circ \alpha = \beta \circ F f \]
+
+两个代数同态的复合仍然是代数同态，这可以通过将两个这样的图表粘贴在一起来看出（函子将复合映射到复合）。恒等箭头也是代数同态，因为
+\[ id_a \circ \alpha = \alpha \circ F (id_a) \]
+（函子将恒等映射到恒等）。
+
+代数同态定义中的交换条件非常严格。例如，考虑一个将整数映射到字符串的函数。在 Haskell 中，有一个 \hask{show} 函数（实际上是 \hask{Show} 类的方法）可以做到这一点。它\emph{不是}从 \hask{eval} 到 \hask{pretty} 的代数同态。
+
+\begin{exercise}
+证明 \hask{show} 不是代数同态。提示：考虑 \hask{PlusF} 节点会发生什么。
+\end{exercise}
+
+\subsection{初始代数}
+
+对于一个给定函子 $F$ 的代数范畴中的初始对象称为\emph{初始代数}，正如我们将看到的，它扮演着非常重要的角色。
+
+根据定义，初始代数 $(i, \iota)$ 有一个唯一的代数同态 $f$ 从它到任何其他代数 $(a, \alpha)$。用图表表示为：
+
+\[
+ \begin{tikzcd}
+ F i 
+ \arrow[r, "F f"]
+ \arrow[d, "\iota"]
+ & F a
+\arrow[d, "\alpha"]
+ \\
+ i
+ \arrow[r, dashed, "f"]
+ & a
+  \end{tikzcd}
+\]
+这个唯一的同态称为代数 $(a, \alpha)$ 的\emph{catamorphism}。它有时使用\index{香蕉括号}\index{$\llparenthesis \rrparenthesis$}``香蕉括号''写成 $\llparenthesis \alpha \rrparenthesis$。
+
+
+\begin{exercise}
+让我们为以下函子定义两个代数：
+\begin{haskell}
+data FloatF x = Num Float | Op x x
+\end{haskell}
+第一个代数：
+\begin{haskell}
+addAlg :: Algebra FloatF Float
+addAlg (Num x) = log x
+addAlg (Op x y) = x + y
+\end{haskell}
+第二个代数：
+\begin{haskell}
+mulAlg :: Algebra FloatF Float
+mulAlg (Num x) = x
+mulAlg (Op x y) = x * y
+\end{haskell}
+给出一个令人信服的论证，说明 \hask{log}（对数）是这两个代数之间的代数同态。（\hask{Float} 是内置的浮点数类型。）
+\end{exercise}
+
+\section{Lambek引理与不动点}
+
+Lambek引理指出，初始代数（initial algebra）的结构映射$\iota$是一个同构。
+
+其原因在于代数的自相似性。你可以使用$F$提升任何代数$(a, \alpha)$，结果$(F a, F \alpha)$也是一个代数，其结构映射为$F \alpha \colon F (F a) \to F a$。
+
+特别地，如果你提升初始代数$(i, \iota)$，你会得到一个以$F i$为载体、结构映射为$F \iota \colon F (F i) \to F i$的新代数。由此可知，必然存在一个从初始代数到这个新代数的唯一代数态射：
+\[
+ \begin{tikzcd}
+ F i 
+ \arrow[r, "F h"]
+ \arrow[d, "\iota"]
+ & F (F i)
+\arrow[d, "F \iota"]
+ \\
+ i
+ \arrow[r, dashed, "h"]
+ & F i
+  \end{tikzcd}
+\]
+这里的$h$就是$\iota$的逆。为了验证这一点，让我们考虑复合映射$\iota \circ h$。它是下图底部的箭头：
+\[
+ \begin{tikzcd}
+ F i 
+ \arrow[r, "F h"]
+ \arrow[d, "\iota"]
+ & F (F i)
+\arrow[d, "F \iota"]
+\arrow[r, "F \iota"]
+& F i
+\arrow[d, "\iota"]
+ \\
+ i
+ \arrow[r, dashed, "h"]
+ & F i
+ \arrow[r, "\iota"]
+ & i
+  \end{tikzcd}
+\]
+这是将原始图表与一个显然交换的图表拼接在一起的结果。因此整个矩形是交换的。我们可以将其解释为$\iota \circ h$是从$(i, \iota)$到其自身的一个代数态射。但已经存在这样的代数态射——即恒等映射。因此，根据从初始代数出发的映射的唯一性，这两者必须相等：
+\[ \iota \circ h = id_i \] 
+
+知道这一点后，我们现在可以回到之前的图表，它表明：
+\[ h \circ \iota = F \iota \circ F h \]
+由于$F$是一个函子，它将复合映射映射为复合映射，将恒等映射映射为恒等映射。因此右边等于：
+\[ F (\iota \circ h) = F (id_i) = id_{F i} \]
+
+我们由此证明了$h$是$\iota$的逆，这意味着$\iota$是一个同构。换句话说：
+\[ F i \cong i \]
+我们将这个等式解释为$i$是$F$的一个不动点（在同构意义下）。$F$在$i$上的作用“不会改变它”。
+
+可能存在许多不动点，但这是\emph{最小不动点}，因为存在一个从它到任何其他不动点的代数态射。自函子$F$的最小不动点记为$\mu F$，因此我们写作：
+\[ i = \mu F \]
+\subsection{Haskell中的不动点}
+让我们考虑不动点的定义如何与我们最初由自函子给出的例子一起工作：
+\begin{haskell}
+data ExprF x = ValF Int | PlusF x x
+\end{haskell}
+它的不动点是一个数据结构，其性质是\hask{ExprF}作用于它时会重现它。如果我们称这个不动点为\hask{Expr}，则不动点方程变为（在伪Haskell中）：
+\begin{haskell}
+Expr = ExprF Expr
+\end{haskell}
+展开\hask{ExprF}我们得到：
+\begin{haskell}
+Expr = ValF Int | PlusF Expr Expr
+\end{haskell}
+将其与递归定义（实际的Haskell）进行比较：
+\begin{haskell}
+data Expr = Val Int | Plus Expr Expr
+\end{haskell}
+我们得到了一个递归数据结构作为不动点方程的解。
+
+在Haskell中，我们可以为任何函子（甚至只是一个类型构造器）定义一个不动点数据结构。正如我们稍后将看到的，这并不总是给我们初始代数的载体。它只适用于那些具有“叶子”成分的函子。
+
+让我们称\hask{Fix f}为函子\hask{f}的不动点。符号上，不动点方程可以写成：
+\[f ( \text{Fix} f) \cong  \text{Fix} f \]
+或者，在代码中，
+\begin{haskell}
+data Fix f where
+  In :: f (Fix f) -> Fix f
+\end{haskell}
+数据构造器\hask{In}正是初始代数的结构映射，其载体是\hask{Fix f}。它的逆是：
+\begin{haskell}
+out :: Fix f -> f (Fix f)
+out (In x) = x
+\end{haskell}
+Haskell标准库包含一个更地道的定义：
+\begin{haskell}
+newtype Fix f = Fix { unFix :: f (Fix f) }
+\end{haskell}
+
+为了创建类型为\hask{Fix f}的项，我们经常使用“智能构造器”。例如，对于\hask{ExprF}函子，我们会定义：
+\begin{haskell}
+val :: Int -> Fix ExprF
+val n = In (ValF n)
+
+plus :: Fix ExprF -> Fix ExprF -> Fix ExprF
+plus e1 e2 = In (PlusF e1 e2)
+\end{haskell}
+并使用它来生成如下的表达式树：
+\begin{haskell}
+e9 :: Fix ExprF
+e9 = plus (plus (val 2) (val 3)) (val 4)
+\end{haskell}
+
+\section{Catamorphisms（Catamorphisms）}
+
+作为程序员，我们的目标是能够对递归数据结构执行计算——即“折叠”它。现在我们已经具备了所有要素。
+
+数据结构被定义为一个函子的不动点。该函子的代数定义了我们要执行的操作。我们已经在以下图表中看到了不动点和代数的结合：
+\[
+ \begin{tikzcd}
+ F i 
+ \arrow[r, "F f"]
+ \arrow[d, "\iota"]
+ & F a
+\arrow[d, "\alpha"]
+ \\
+ i
+ \arrow[r, dashed, "f"]
+ & a
+  \end{tikzcd}
+\]
+该图表定义了代数 $(a, \alpha)$ 的 catamorphism $f$。
+
+最后一条信息是 Lambek 引理，它告诉我们 $\iota$ 可以被反转，因为它是一个同构。这意味着我们可以将这个图表解读为：
+\[ f = \alpha \circ F f \circ \iota^{-1} \]
+并将其解释为 $f$ 的递归定义。
+
+让我们使用 Haskell 符号重新绘制这个图表。Catamorphism 依赖于代数，因此对于载体为 \hask{a} 且求值器为 \hask{alg} 的代数，我们将得到 catamorphism \hask{cata alg}。
+
+\[
+ \begin{tikzcd}
+  \hask{f (Fix f)}
+ \arrow[rrrr, "\hask{fmap (cata alg)}"]
+ &&&& \hask{f a}
+\arrow[d, "\hask{alg}"]
+ \\
+ \hask{Fix f}
+ \arrow[u, "\hask{out}"]
+ \arrow[rrrr, dashed, "\hask{cata alg}"]
+ &&&& \hask{a}
+  \end{tikzcd}
+\]
+通过简单地跟随箭头，我们得到了这个递归定义：
+\begin{haskell}
+cata :: Functor f => Algebra f a -> Fix f -> a
+cata alg = alg . fmap (cata alg) . out
+\end{haskell}
+
+以下是发生的事情：我们将这个定义应用于某个 \hask{Fix f}。每个 \hask{Fix f} 都是通过将 \hask{In} 应用于一个包含 \hask{Fix f} 的函子得到的：
+\begin{haskell}
+data Fix f where
+  In :: f (Fix f) -> Fix f
+\end{haskell}
+函数 \hask{out} “剥离”数据构造函数 \hask{In}：
+\begin{haskell}
+out :: Fix f -> f (Fix f)
+out (In x) = x
+\end{haskell}
+
+我们现在可以通过在其上 \hask{fmap}'ing \hask{cata alg} 来评估包含 \hask{Fix f} 的函子。这是一个递归应用。其思想是函子内部的树比原始树小，因此递归最终会终止。当它到达叶子时，递归终止。
+
+在这一步之后，我们剩下一个包含值的函子，我们对其应用求值器 \hask{alg}，以得到最终结果。
+
+这种方法的强大之处在于所有的递归都封装在一个数据类型和一个库函数中：我们有 \hask{Fix} 的定义和 catamorphism \hask{cata}。库的客户端只提供 \emph{非递归} 的部分：函子和代数。这些部分更容易处理。我们将一个复杂的问题分解为更简单的组件。
+
+\subsection{示例}
+
+我们可以立即将此构造应用于我们之前的示例。你可以验证：
+\begin{haskell}
+cata eval e9
+\end{haskell}
+计算结果为 $9$，而
+\begin{haskell}
+cata pretty e9
+\end{haskell}
+计算结果为字符串 \hask{"2 + 3 + 4"}。
+
+有时我们希望以缩进的方式在多行上显示树。这需要将深度计数器传递给递归调用。有一个巧妙的技巧是使用函数类型作为载体：
+\begin{haskell}
+pretty' :: Algebra ExprF (Int -> String)
+pretty' (ValF n) i = indent i ++ show n
+pretty' (PlusF f g) i = f (i + 1) ++ "\n" ++
+                        indent i ++ "+" ++ "\n" ++
+                        g (i + 1)
+\end{haskell}
+辅助函数 \hask{indent} 复制空格字符：
+\begin{haskell}
+indent n = replicate (n * 2) ' '
+\end{haskell}
+以下代码的结果：
+\begin{haskell}
+cata pretty' e9 0
+\end{haskell}
+打印出来如下所示：
+\begin{haskell}
+    2
+  +
+    3
++
+  4
+\end{haskell}
+
+让我们尝试为其他熟悉的函子定义代数。\hask{Maybe} 函子的不动点：
+\begin{haskell}
+data Maybe x = Nothing | Just x
+\end{haskell}
+经过一些重命名后，等价于自然数类型：
+\begin{haskell}
+data Nat = Z | S Nat
+\end{haskell}
+该函子的代数由载体 \hask{a} 的选择和求值器组成：
+\begin{haskell}
+alg :: Maybe a -> a
+\end{haskell}
+从 \hask{Maybe} 的映射由两件事决定：对应于 \hask{Nothing} 的值和对应于 \hask{Just} 的函数 \hask{a->a}。在我们讨论自然数类型时，我们称这些为 \hask{init} 和 \hask{step}。我们现在可以看到，\hask{Nat} 的消去规则是该代数的 catamorphism。
+
+\subsection{列表作为初始代数}
+
+我们之前看到的列表类型等价于以下函子的不动点，该函子由列表内容的类型 \hask{a} 参数化：
+\begin{haskell}
+data ListF a x = NilF | ConsF a x
+\end{haskell}
+该函子的代数是一个映射：
+\begin{haskell}
+alg :: ListF a c -> c
+alg NifF = init
+alg (ConsF a c) = step (a, c)
+\end{haskell}
+它由值 \hask{init} 和函数 \hask{step} 决定：
+\begin{haskell}
+init :: c
+step :: (a, c) -> c
+\end{haskell}
+这种代数的 catamorphism 是列表递归器：
+\begin{haskell}
+recList :: c -> ((a, c) -> c) -> (List a -> c)
+\end{haskell}
+其中 \hask{(List a)} 可以识别为不动点 \hask{Fix (ListF a)}。
+
+我们之前见过一个递归函数，它反转一个列表。它是通过将元素附加到列表的末尾来实现的，这非常低效。使用 catamorphism 重写这个函数很容易，但问题仍然存在。
+
+另一方面，前置元素是廉价的。一个更好的算法将遍历列表，将元素累积在一个先进先出的队列中，然后逐个弹出它们并将它们前置到一个新列表中。
+
+队列机制可以使用闭包的组合来实现：每个闭包都是一个记住其环境的函数。以下是载体为函数类型的代数：
+\begin{haskell}
+revAlg :: Algebra (ListF a) ([a]->[a])
+revAlg NilF = id
+revAlg (ConsF a f) = \as -> f (a : as)
+\end{haskell}
+在每一步，这个代数都会创建一个新函数。这个函数在执行时，会将前一个函数 \hask{f} 应用于一个列表，该列表是将当前元素 \hask{a} 前置到函数的参数 \hask{as} 的结果。生成的闭包记住了当前元素 \hask{a} 和前一个函数 \hask{f}。
+
+该代数的 catamorphism 累积了这些闭包的队列。要反转一个列表，我们将该代数的 catamorphism 的结果应用于空列表：
+\begin{haskell}
+reverse :: Fix (ListF a) -> [a]
+reverse as = (cata revAlg as) []
+\end{haskell}
+这个技巧是左折叠函数 \hask{foldl} 的核心。使用它时应小心，因为存在栈溢出的风险。
+
+列表非常常见，以至于它们的消去器（称为“折叠”）被包含在标准库中。但存在无限多种可能的递归数据结构，每种数据结构由其自己的函子生成，我们可以在所有这些数据结构上使用相同的 catamorphism。
+
+值得一提的是，列表构造在任何具有余积的幺半群范畴中都有效。我们可以用更一般的函子替换列表函子：
+\[ F x = I + a \otimes x \]
+其中 $I$ 是单位对象，$\otimes$ 是张量积。不动点方程的解：
+\[ L_a \cong I + a \otimes L_a \]
+可以正式写为一个级数：
+\[ L_a = I + a + a \otimes a + a \otimes a \otimes a + ... \]
+我们将其解释为列表的定义，它可以是空的 $I$，单元素 $a$，双元素列表 $a \otimes a$，依此类推。
+
+顺便说一句，如果你仔细观察，这个解可以通过一系列形式变换得到：
+\begin{align*}
+L_a &\cong I + a \otimes L_a
+\\
+L_a - a \otimes L_a &\cong I
+\\
+(I - a) \otimes L_a &\cong I
+\\
+L_a &\cong I / (I - a)
+\\
+L_a &\cong I + a + a \otimes a + a \otimes a \otimes a + ...
+\end{align*}
+其中最后一步使用了几何级数的求和公式。诚然，中间步骤没有意义，因为对象上没有定义减法或除法，但最终结果是有意义的，正如我们稍后将看到的，它可以通过考虑对象链的余极限来严格化。
+
+\section{从普遍性看初始代数}
+
+另一种看待初始代数的方式，至少在$\mathbf{Set}$中，是将其视为一组catamorphisms（范畴态射），这些catamorphisms作为一个整体暗示了底层对象的存在。我们不是将$\mu F$看作一组树，而是将其看作从代数到其载体的函数集合。
+
+在某种程度上，这只是Yoneda引理的另一种表现形式：每个数据结构都可以通过映射进入或映射出来描述。在这种情况下，映射进入的是递归数据结构的构造函数，而映射出来的是可以应用于它的所有catamorphisms。
+
+首先，让我们在\hask{cata}的定义中显式地表示多态性：
+\begin{haskell}
+cata :: Functor f => forall a. Algebra f a -> Fix f -> a
+cata alg = alg . fmap (cata alg) . out
+\end{haskell}
+然后交换参数。我们得到：
+\begin{haskell}
+cata' :: Functor f => Fix f -> forall a. Algebra f a -> a
+cata' (In x) = \alg -> alg (fmap (flip cata' alg) x)
+\end{haskell}
+函数\index{\hask{flip}}\hask{flip}反转了函数的参数顺序：
+\begin{haskell}
+flip :: (a -> b -> c) -> (b -> a -> c)
+flip f b a = f a b
+\end{haskell}
+这给了我们一个从\hask{Fix f}到一组多态函数的映射。
+
+相反，给定一个类型为：
+\begin{haskell}
+forall a. Algebra f a -> a
+\end{haskell}
+的多态函数，我们可以重建\hask{Fix f}：
+\begin{haskell}
+uncata :: Functor f => (forall a. Algebra f a -> a) -> Fix f
+uncata alga = alga In
+\end{haskell}
+事实上，这两个函数\hask{cata'}和\hask{uncata}互为逆函数，建立了\hask{Fix f}与多态函数类型之间的同构：
+\begin{haskell}
+data Mu f = Mu (forall a. Algebra f a -> a)
+\end{haskell}
+现在我们可以用\hask{Mu f}替换所有使用\hask{Fix f}的地方。
+
+在\hask{Mu f}上进行折叠很容易，因为\hask{Mu}本身携带了它自己的一组catamorphisms：
+\begin{haskell}
+cataMu :: Algebra f a -> (Mu f -> a)
+cataMu alg (Mu h) = h alg
+\end{haskell}
+
+你可能会想知道如何为列表等类型构造\hask{Mu f}的项。这可以通过递归来完成：
+\begin{haskell}
+fromList :: forall a. [a] -> Mu (ListF a)
+fromList as = Mu h
+  where h :: forall x. Algebra (ListF a) x -> x
+        h alg = go as
+          where
+            go [] = alg NilF
+            go (n: ns) = alg (ConsF n (go ns))
+\end{haskell}
+要编译此代码，你必须使用语言编译指示：
+\begin{haskell}
+{-# language ScopedTypeVariables #-}
+\end{haskell}
+这将类型变量\hask{a}置于\hask{where}子句的作用域内。
+
+\begin{exercise}
+编写一个测试，该测试接受一个整数列表，将其转换为\hask{Mu}形式，并使用\hask{cataMu}计算总和。
+\end{exercise}
+
+\section{初始代数作为余极限}
+
+一般来说，无法保证代数范畴中的初始对象存在。但如果它存在，Lambek引理告诉我们，它是这些代数的自函子的不动点。这个不动点的构造有些神秘，因为它涉及递归的“打结”。
+
+粗略地说，不动点是在我们无限次应用函子后达到的。然后，再应用一次也不会改变任何东西。无穷加一仍然是无穷。如果我们一步一步地来看，这个想法可以变得精确。为了简单起见，让我们考虑集合范畴中的代数，它具有所有良好的性质。
+
+在我们的例子中，我们已经看到，构建递归数据结构的实例总是从叶子开始。叶子是函子定义中不依赖于类型参数的部分：列表的\hask{NilF}、树的\hask{ValF}、\hask{Maybe}的\hask{Nothing}等。
+
+如果我们将函子$F$应用于初始对象——空集$0$，我们可以将它们提取出来。由于空集没有元素，类型$F 0$的实例只能是叶子。
+
+事实上，类型\hask{Maybe Void}的唯一居民是使用\hask{Nothing}构造的。类型\hask{ExprF Void}的唯一居民是\hask{ValF n}，其中\hask{n}是一个\hask{Int}。
+
+换句话说，$F 0$是函子$F$的“叶子类型”。叶子是深度为一的树。对于\hask{Maybe}函子，只有一个叶子。这个函子的叶子类型是一个单例：
+\begin{haskell}
+m1 :: Maybe Void
+m1 = Nothing
+\end{haskell}
+
+在第二次迭代中，我们将$F$应用于上一步的叶子，得到深度最多为二的树。它们的类型是$F(F 0)$。
+
+例如，这些是类型\hask{Maybe(Maybe Void)}的所有项：
+\begin{haskell}
+m2, m2' :: Maybe (Maybe Void)
+m2 = Nothing
+m2' = Just Nothing
+\end{haskell}
+
+我们可以继续这个过程，在每一步添加越来越深的树。在第$n$次迭代中，类型$F^n 0$（$F$对初始对象的$n$次应用）描述了所有深度不超过$n$的树。然而，对于每个$n$，仍然有无限多个深度大于$n$的树没有被覆盖。
+
+如果我们知道如何定义$F^{\infty} 0$，我们将覆盖所有可能的树。我们可以尝试的次优方法是将所有部分树相加，并构造一个无限和类型。就像我们定义了两个类型的和一样，我们可以定义多个类型的和，包括无限多个。
+
+一个无限和（余积）：
+$$ \sum_{n = 0}^{\infty} F^n 0$$
+就像有限和一样，只是它有无限多个构造器$i_n$：
+\[
+ \begin{tikzcd}
+ 0
+ \arrow[ddrr, "i_0"']
+ & F 0
+  \arrow[ddr, "i_1"]
+& F (F 0)
+  \arrow[dd, "i_2"]
+ & ...
+ & F^n 0
+  \arrow[ddll, red, "i_n"]
+ & ...
+ \\
+ \\
+ &&\sum_{n = 0}^{\infty} F^n 0
+  \end{tikzcd}
+\]
+它具有通用的映射出性质，就像两个类型的和一样，只是有无限多个情况。（显然，我们无法在Haskell中表达它。）
+
+要构造一个深度为$n$的树，我们首先从$F^n 0$中选择它，并使用第$n$个构造器$i_n$将其注入到和中。
+
+只有一个问题：相同的树形也可以通过任何$F^m 0$构造，其中$m > n$。
+
+事实上，我们已经看到叶子\hask{Nothing}出现在\hask{Maybe Void}和\hask{Maybe(Maybe Void)}中。事实上，它出现在\hask{Maybe}作用于\hask{Void}的任何非零幂中。
+
+类似地，\hask{Just Nothing}出现在所有从二开始的幂中。
+
+\hask{Just(Just(Nothing))}出现在所有从三开始的幂中，依此类推...
+
+但有一种方法可以消除所有这些重复。诀窍是用余极限代替和。我们可以构造一个链（这样的链称为$\omega$-链），而不是由离散对象组成的图。让我们称这个链为$\Gamma$，它的余极限为$i$：
+\[i = \text{Colim} \, \Gamma \]
+
+\[
+ \begin{tikzcd}
+ 0
+ \arrow[r, "\mbox{!`}"]
+ \arrow[ddrr, "i_0"']
+ & F 0
+  \arrow[r, "F\mbox{!`}"]
+ \arrow[ddr, "i_1"]
+& F (F 0)
+  \arrow[r, "F(F\mbox{!`})"]
+  \arrow[dd, "i_2"]
+ & ...
+ \arrow[r]
+ & F^n 0
+  \arrow[r]
+ \arrow[ddll, "i_n"]
+ & ...
+ \\
+ \\
+ &&i
+  \end{tikzcd}
+\]
+它几乎与和相同，但在余锥的底部有额外的箭头。这些箭头是从初始对象到$F 0$的唯一箭头$\mbox{!`}$的累积提升（我们在Haskell中称它为\hask{absurd}）。这些箭头的效果是将同一树的无限多个副本折叠成一个代表。
+
+要看到这一点，考虑一个深度为$3$的树。它首先可以作为$F^3 0$的一个元素找到，也就是说，作为一个箭头$t \colon 1 \to F^3 0$。它被注入到余极限$i$中，作为复合$i_3 \circ t$。
+
+\[
+ \begin{tikzcd}
+ ...
+& 1
+\arrow[d, red, "t"]
+\arrow[dr, "t'"]
+ \\
+ ...
+ \arrow[r]
+ & F^3 0 
+ \arrow[r,  blue, "F^3 (\mbox{!`})"]
+ \arrow[d, blue, "i_3"]
+ & F^4 0
+ \arrow[dl, blue, "i_4"]
+ \\
+ &  i
+  \end{tikzcd}
+\]
+相同的树形也可以在$F^4 0$中找到，作为复合$t' = F^3 (\mbox{!`}) \circ t$。它被注入到余极限中，作为复合$i_4 \circ t' = i_4 \circ F^3 (\mbox{!`}) \circ t$。
+
+然而，这次我们有一个交换三角形——余锥的面：
+\[i_4 \circ F^3 (\mbox{!`}) = i_3 \]
+这意味着：
+\[ i_4 \circ t' =  i_4 \circ F^3 (\mbox{!`}) \circ t =  i_3 \circ t\]
+两个树的副本在余极限中被识别。你可以相信这个过程消除了所有重复。
+
+\subsection{证明}
+
+我们可以直接证明$i = \text{Colim}\, \Gamma$是初始代数。然而，我们必须做一个假设：函子$F$必须保持$\omega$-链的余极限。$F \Gamma$的余极限必须等于$F i$。
+\[ \text{Colim} (F \Gamma) \cong F i \]
+幸运的是，这个假设在$\mathbf{Set}$中成立\footnote{这是$\Set$中的余极限由集合的不交并构建的结果。}。
+
+以下是证明的概要：为了证明同构，我们首先构造一个箭头$i \to F i$，然后构造一个箭头$\iota \colon F i \to i$。我们将跳过它们互为逆的证明。然后，我们通过构造一个到任意代数的catamorphism来展示$(i, \iota)$的通用性。
+
+所有后续的证明都遵循一个简单的模式。我们从定义余极限的通用余锥开始。然后，我们基于相同的链构造另一个余锥。根据通用性，必须有一个从余极限到这个新余锥顶点的唯一箭头。
+
+我们使用这个技巧来构造映射$i \to F i$。如果我们能构造一个从链$\Gamma$到$\text{Colim} (F \Gamma)$的余锥，那么根据通用性，必须有一个从$i$到$\text{Colim} (F \Gamma)$的箭头。后者，根据我们的假设$F$保持余极限，同构于$F i$。因此，我们将有一个映射$i \to F i$。
+
+为了构造这个余锥，首先注意到$\text{Colim} (F \Gamma$)根据定义是余锥$F \Gamma$的顶点。
+
+\[
+ \begin{tikzcd}
+ F 0
+ \arrow[r, blue, "F \mbox{!`}"]
+ \arrow[ddrr, "j_1"']
+ &  F (F 0)
+  \arrow[r, blue, "F(F  \mbox{!`})"]
+ \arrow[ddr, "j_2"]
+& F^3 0
+  \arrow[r, blue, "F^3\mbox{!`}"]
+  \arrow[dd, "j_3"]
+ & ...
+ \arrow[r]
+ & F^n 0
+  \arrow[r, blue]
+ \arrow[ddll, "j_n"]
+ & ...
+ \\
+ \\
+ &&\text{Colim} (F \Gamma)
+  \end{tikzcd}
+\]
+图$F \Gamma$与$\Gamma$相同，只是它缺少链开头的初始对象。
+
+我们正在寻找的从$\Gamma$到$\text{Colim} (F \Gamma)$的余锥的辐条在下图中用红色标记：
+\[
+ \begin{tikzcd}
+ 0
+ \arrow[r, "\mbox{!`}"]
+ \arrow[d, red, "\mbox{!`}"]
+ & F 0
+  \arrow[r, "F\mbox{!`}"]
+  \arrow[d, red, "F\mbox{!`}"]
+& F (F 0)
+  \arrow[r, "F(F\mbox{!`})"]
+  \arrow[d, red, "F(F\mbox{!`})"]
+ & ...
+ \arrow[r]
+ & F^{n+1} 0
+  \arrow[r]
+  \arrow[d, red]
+ & ...
+ \\
+ F 0
+ \arrow[r, blue, "F \mbox{!`}"]
+ \arrow[ddrr, red, "j_1"']
+ &  F (F 0)
+  \arrow[r, blue, "F(F  \mbox{!`})"]
+ \arrow[ddr, red, "j_2"]
+& F^3 0
+  \arrow[r, blue, "F^3\mbox{!`}"]
+  \arrow[dd, red, "j_3"]
+ & ...
+ \arrow[r, blue]
+ & F^n 0
+  \arrow[r, blue]
+ \arrow[ddll, red, "j_n"]
+ & ...
+ \\
+ \\
+ &&\text{Colim} (F \Gamma)
+  \end{tikzcd}
+\]
+由于$i = \text{Colim}\, \Gamma$是基于$\Gamma$的通用余锥的顶点，必须有一个从它到$\text{Colim} (F \Gamma)$的唯一映射，正如我们所说，它等于$F i$。这就是我们正在寻找的映射：
+\[ i \to F i \]
+
+接下来，注意到链$F \Gamma$是$\Gamma$的一个子链，因此可以嵌入其中。这意味着我们可以通过（$\Gamma$的一个子链）构造一个从$F \Gamma$到顶点$i$的余锥（下面的红色箭头）。
+
+\[
+ \begin{tikzcd}
+ & F 0
+  \arrow[r, blue, "F\mbox{!`}"]
+  \arrow[d, red]
+& F (F 0)
+  \arrow[r, blue, "F(F\mbox{!`})"]
+  \arrow[d, red]
+ & ...
+ \arrow[r, blue]
+ & F^{n} 0
+  \arrow[r, blue]
+  \arrow[d, red]
+ & ...
+ \\
+  0
+ \arrow[r, "\mbox{!`}"]
+ \arrow[ddrr,  "i_0"']
+ &  F 0
+  \arrow[r, "F  \mbox{!`}"]
+ \arrow[ddr, red, "i_1"]
+& F^2 0
+  \arrow[r, "F^2\mbox{!`}"]
+  \arrow[dd, red, "i_2"]
+ & ...
+ \arrow[r]
+ & F^n 0
+  \arrow[r]
+ \arrow[ddll, red, "i_n"]
+ & ...
+ \\
+ \\
+ &&i
+  \end{tikzcd}
+\]
+
+根据$\text{Colim} (F \Gamma)$的通用性，存在一个映射出
+\[\text{Colim} (F \Gamma) \to i \]
+因此，我们有另一个方向的映射：
+\[ \iota \colon F i \to i \]
+这表明$i$是一个代数的载体。事实上，可以证明这两个映射互为逆，正如我们从Lambek引理所期望的那样。
+
+为了证明$(i, \iota)$确实是初始代数，我们必须构造一个从它到任意代数$(a, \alpha \colon F a \to a)$的映射。同样，我们可以使用通用性，只要我们能构造一个从$\Gamma$到$a$的余锥。
+
+\[
+ \begin{tikzcd}
+ 0
+ \arrow[r, "\mbox{!`}"]
+ \arrow[ddrr, "f_0"']
+ & F 0
+  \arrow[r, "F\mbox{!`}"]
+ \arrow[ddr, "f_1"]
+& F (F 0)
+  \arrow[r, "F(F\mbox{!`})"]
+  \arrow[dd, "f_2"]
+ & ...
+ \arrow[r]
+ & F^n 0
+  \arrow[r]
+ \arrow[ddll, "f_n"]
+ & ...
+ \\
+ \\
+ &&a
+  \end{tikzcd}
+\]
+
+这个余锥的第零个辐条从$0$到$a$，所以它只是$f_0 = \mbox{!`}$。
+
+第一个辐条，$F 0 \to a$，是$f_1 = \alpha \circ F f_0$，因为$F f_0 \colon F 0 \to F a$和$\alpha \colon F a \to a$。
+
+第三个辐条，$F (F 0) \to a$是$f_2 = \alpha \circ F f_1$。依此类推...
+
+从$i$到$a$的唯一映射就是我们的catamorphism。通过更多的图追踪，可以证明它确实是一个代数态射。
+
+请注意，这个构造只有在我们可以通过创建函子的叶子来“启动”过程时才有效。另一方面，如果$F 0 \cong 0$，那么没有叶子，所有进一步的迭代将继续复制$0$。
+
+\end{document}

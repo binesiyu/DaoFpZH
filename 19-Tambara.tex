@@ -1,0 +1,735 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{18}
+
+\chapter{Tambara 模}
+
+在编程中，范畴论的一个晦涩角落突然变得重要并不常见。Tambara 模在应用于profunctor光学（profunctor optics）时获得了新生。它们为光学组合问题提供了一个巧妙的解决方案。我们已经看到，在透镜（lens）的情况下，getter 可以使用函数组合很好地组合，但 setter 的组合涉及一些技巧。存在表示（existential representation）并没有多大帮助。另一方面，profunctor 表示使组合变得轻而易举。
+
+这种情况有点类似于图形编程中几何变换的组合问题。例如，如果你尝试围绕两个不同的轴组合两个旋转，新轴和角度的公式会相当复杂。但如果你将旋转表示为矩阵，你可以使用矩阵乘法；或者，如果你将它们表示为四元数，你可以使用四元数乘法。Profunctor 表示允许你使用直接的函数组合来组合光学。
+
+\section{Tannakian 重构}
+
+\subsection{幺半群及其表示}
+
+表示理论本身就是一门科学。在这里，我们将从范畴论的角度来探讨它。我们将考虑幺半群（monoid）而不是群。幺半群可以定义为幺半范畴（monoidal category）中的一个特殊对象，但它也可以被视为一个单对象范畴 $\cat M$。我们称其对象为 $*$，唯一的 hom-集 $\cat M( *, *)$ 包含了我们需要的所有信息。
+
+我们在幺半群中称为“乘积”的东西被态射的组合所取代。根据范畴的定律，它是结合的和有单位的——恒等态射扮演了幺半单位的角色。
+
+从这个意义上说，每个单对象范畴自动是一个幺半群，所有幺半群都可以变成单对象范畴。
+
+例如，带有加法的整数幺半群可以被认为是一个具有单个抽象对象 $*$ 和每个数字的不同态射的范畴。要组合两个这样的态射，你可以将它们的数字相加，如下例所示：
+\[
+ \begin{tikzcd}
+  *
+  \arrow[r, bend left, "2"]
+  \arrow[rr, bend right, "5"']
+ & *
+ \arrow[r, bend left, "3"]
+ & *
+  \end{tikzcd}
+\]
+对应于零的态射自动成为恒等态射。
+
+我们可以将幺半群表示为集合的变换。这样的表示由一个函子 $F \colon \cat M \to \Set$ 给出。它将单个对象 $*$ 映射到某个集合 $S$，并将 hom-集 $\cat M(*, *)$ 映射到一组函数 $S \to S$。根据函子定律，它将恒等映射到恒等，将组合映射到组合，因此它保留了幺半群的结构。
+
+如果函子是完全忠实的，它的图像包含与幺半群完全相同的信息，没有更多。但一般来说，函子往往会“作弊”。hom-集 $\Set (S, S)$ 可能包含一些不在 $\cat M(*, *)$ 图像中的其他函数；并且 $\cat M$ 中的多个态射可能被映射到单个函数。
+
+在极端情况下，整个 hom-集 $\cat M(*, *)$ 可能被映射到恒等函数 $id_S$。因此，仅通过查看集合 $S$——函子 $F$ 下 $*$ 的图像——我们无法梦想重建原始幺半群。
+
+不过，如果我们被允许同时查看给定幺半群的所有表示，那么并非一切都失去了。这样的表示形成一个范畴——函子范畴 $[\cat M, \Set]$，也称为 $\cat M$ 上的共预层范畴（co-presheaf category）。这个范畴中的箭头是自然变换。
+
+由于源范畴 $\cat M$ 只包含一个对象，自然性条件采取特别简单的形式。自然变换 $\alpha \colon F \to G$ 只有一个分量，即函数 $\alpha \colon F *\; \to \;G *$。给定一个态射 $m \colon * \to *$，自然性方块如下：
+
+\[
+ \begin{tikzcd}
+ F *
+ \arrow[r, "\alpha"]
+ \arrow[d, "F m"]
+ & G *
+  \arrow[d, "G m"]
+\\
+ F *
+ \arrow[r, "\alpha"]
+ & G *
+ \end{tikzcd}
+\]
+这是作用于两个集合的三个函数之间的关系：
+\[
+ \begin{tikzcd}
+ F *
+  \arrow[loop, "F m"']
+  \arrow[rr, bend right, "\alpha"']
+ && G *
+  \arrow[loop, "G m"']
+  \end{tikzcd}
+\]
+自然性条件告诉我们：
+\[ \alpha \circ (F m) = (G m) \circ \alpha \]
+
+换句话说，如果你在集合 $F *$ 中选取任何元素 $x$，你可以使用 $\alpha$ 将其映射到 $G *$，然后应用对应于 $m$ 的变换 $G m$；或者你可以先应用变换 $F m$，然后使用 $\alpha$ 映射结果。结果必须相同。
+
+这样的函数被称为\index{等变函数}\emph{等变函数}。我们通常称 $F m$ 为 $m$ 在集合 $F *$ 上的\index{幺半群作用}\emph{作用}。等变函数通过预组合或后组合将一个集合上的作用连接到另一个集合上的相应作用。
+
+\subsection{Cayley 定理}
+
+在群论中，Cayley 定理指出，每个群都同构于一个（子群的）置换群。一个\index{群}\emph{群}（group）就是一个幺半群，其中每个元素 $g$ 都有一个逆元 $g^{-1}$。置换是双射函数，将一个集合映射到自身。它们\emph{置换}（permute）集合中的元素。
+
+在范畴论中，Cayley 定理几乎内置于幺半群及其表示的定义中。
+
+单对象解释与更传统的“元素集合”解释之间的关联很容易建立。我们通过构造函子 $F \colon \cat M \to \Set$ 来实现这一点，该函子将 $*$ 映射到特殊的集合 $S$，该集合等于同态集：$S = \cat M(*, *)$。该集合的元素与 $\cat M$ 中的态射一一对应。我们将 $F$ 在态射上的作用定义为后复合：
+\[ (F m) n = m \circ n \]
+这里 $m$ 是 $\cat M$ 中的一个态射，$n$ 是 $S$ 中的一个元素，而 $S$ 中的元素恰好也是 $\cat M$ 中的态射。
+
+我们可以将这种特定的表示视为幺半群在幺半范畴 $\Set$ 中的另一种定义。我们只需要实现单位元和乘法：
+\begin{align*}
+\eta &\colon 1 \to S
+\\
+\mu &\colon S \times S \to S
+\end{align*}
+单位元选择 $S$ 中对应于 $\cat M(*, *)$ 中 $id_*$ 的元素。两个元素 $m$ 和 $n$ 的乘法由对应于 $m \circ n$ 的元素给出。
+
+同时，我们可以将 $S$ 视为 $F \colon \cat M \to \Set$ 的像，在这种情况下，形成幺半群表示的是函数 $S \to S$。这就是 Cayley 定理的本质：每个幺半群都可以由一组自函数表示。
+
+在编程中，应用 Cayley 定理的最佳例子是\index{列表反转}列表反转的高效实现。回想一下反转的朴素递归实现：
+\begin{haskell}
+reverse :: [a] -> [a]
+reverse [] = []
+reverse (a : as) = reverse as ++ [a]
+\end{haskell}
+它将列表分为头部和尾部，反转尾部，并将头部构成的单例列表附加到结果中。问题在于每次附加操作都必须遍历不断增长的列表，导致 $O(N^2)$ 的性能。
+
+然而，请记住，列表是一个（自由）幺半群：
+\begin{haskell}
+instance Monoid [a] where
+  mempty = []
+  mappend as bs = as ++ bs
+\end{haskell}
+我们可以使用 Cayley 定理将这个幺半群表示为列表上的函数：
+\begin{haskell}
+type DList a = [a] -> [a]
+\end{haskell}
+为了表示一个列表，我们将其转换为一个函数。它是一个函数（闭包），将该列表 \hask{as} 前置到其参数 \hask{xs} 中：
+\begin{haskell}
+rep :: [a] -> DList a
+rep as = \xs -> as ++ xs
+\end{haskell}
+这种表示称为\index{差异列表}\emph{差异列表}（difference list）。
+
+要将函数转换回列表，只需将其应用于空列表：
+\begin{haskell}
+unRep :: DList a -> [a]
+unRep f = f []
+\end{haskell}
+很容易验证空列表的表示是恒等函数，而两个列表连接的表示是表示的复合：
+\begin{haskell}
+rep [] = id
+rep (xs ++ ys) = rep xs . rep ys
+\end{haskell}
+因此，这正是列表幺半群的 Cayley 表示。
+
+我们现在可以将反转算法转换为生成这种新表示：
+\begin{haskell}
+rev :: [a] -> DList a
+rev [] = rep []
+rev (a : as) = rev as . rep [a]
+\end{haskell}
+并将其转换回列表：
+\begin{haskell}
+fastReverse :: [a] -> [a]
+fastReverse = unRep . rev
+\end{haskell}
+乍一看，似乎我们除了在递归算法之上添加了一层转换之外，并没有做太多事情。然而，新算法的性能是 $O(N)$ 而不是 $O(N^2)$。为了理解这一点，考虑反转一个简单的列表 \hask{[1, 2, 3]}。函数 \hask{rev} 将这个列表转换为函数的复合：
+\begin{haskell}
+ rep [3] . rep [2] . rep [1]
+\end{haskell}
+它以线性时间完成。函数 \hask{unRep} 执行这个复合作用于空列表。但请注意，每个 \hask{rep} 都将其参数前置到累积结果中。特别是，最后的 \hask{rep [3]} 执行：
+\begin{haskell}
+ [3] ++ [2, 1]
+\end{haskell}
+与附加不同，前置是一个常数时间操作，因此整个算法需要 $O(N)$ 时间。
+
+另一种理解方式是意识到 \hask{rev} 按照列表元素的顺序从头部开始将操作排队。但函数的队列是按照先进先出（FIFO）的顺序执行的。
+
+由于 Haskell 的惰性，使用 \hask{foldl} 的列表反转具有类似的性能：
+\begin{haskell}
+reverse = foldl (\as a -> a : as) []
+\end{haskell}
+这是因为 \hask{foldl} 在返回结果之前，从左到右遍历列表，累积函数（闭包）。然后根据需要以 FIFO 顺序执行它们。
+
+\subsection{幺半群的Tannakian重构}
+
+我们需要多少信息才能从幺半群的表示中重构出该幺半群？仅仅观察集合肯定是不够的，因为任何幺半群都可以在任何集合上表示。但如果我们包含这些集合之间的结构保持函数，我们或许有机会。
+
+范畴论的通常方法是着眼于全局，而不是专注于个别情况。因此，我们不是专注于单个函子，而是考虑给定幺半群 $\cat M$ 的所有表示的总和——函子范畴 $[\cat M, \Set]$。
+
+我们可以定义一个称为\index{纤维函子}纤维函子的遗忘函子，$\mathvar{fib} \colon [\cat M, \Set] \to \Set$。它在对象（这里是函子）上的作用提取出底层集合：
+\[ \mathvar{fib} F = F *\]
+它在箭头（这里是自然变换）上的作用产生相应的等变函数。作用于 $\alpha \colon F \to G$ 时，我们得到：
+\[\mathop{\mathvar{fib}} \alpha \colon F *\; \to G * \]
+
+函子 $\mathvar{fib}$ 是函子范畴 $[[\cat M, \Set], \Set]$ 的一个成员。在这个范畴中，箭头是自然变换，它们是由函子参数化的 $\Set$ 中的函数族。对于Tannakian重构，我们将专注于从 $\mathvar{fib}$ 到其自身的自然变换的集合。我们可以将其写为函子范畴 $[\cat M, \Set]$ 上的一个端：
+\[ \int_F \Set(\mathvar{fib} F, \mathvar{fib} F) \]
+或者，展开 $\mathvar{fib}$ 的定义：
+\[ \int_F \Set(F *, F *) \]
+
+以下是一些细节。端下的profunctor是一个形式如下的函子：
+\[ P \colon [\cat M, \Set]^{op} \times [\cat M, \Set] \to \Set \]
+它在对象（从 $\cat M$ 到 $\Set$ 的函子对）上的作用是：
+\[ P \langle G, H \rangle = \Set (G *, H *) \]
+
+让我们定义它在态射（即自然变换对）上的作用。给定任何一对：
+\begin{align*}
+\alpha &\colon G' \to G \\ 
+\beta &\colon H \to H'
+\end{align*}
+它们的提升是一个函数：
+\[ P\langle \alpha, \beta \rangle \colon  \Set ( G*, H*)  \to \Set (G'*, H'*)\] 这是通过预组合 $\alpha$ 和后组合 $\beta$ 来实现的。
+
+端是一个巨大的积，即从同态集 $\Set ( F*, F*)$ 中选取的函数元组，每个函子对应一个。这些元组进一步受到楔形条件的约束。我们可以通过实例化单例集（终对象）的普遍条件来提取这个约束。这里我们选取 $g$ 作为 $\Set (G*, G*)$ 的一个元素，$h$ 作为 $\Set (H*, H*)$ 的一个元素，
+\[
+ \begin{tikzcd}
+ & 1
+ \arrow[ddl, bend right,  "g"']
+ \arrow[ddr, bend left, "h"]
+ \arrow[d, dashed, ""]
+ \\
+ & \int_F \Set (F *, F *)
+ \arrow[dl, "\pi_G"']
+ \arrow[dr, "\pi_H"]
+ \\
+ \Set(G *, G *)
+ \arrow[dr, "\alpha \circ -"']
+ && \Set (H *, H *)
+  \arrow[dl, "- \circ \alpha"]
+\\
+ & \Set (G *, H *)
+ \end{tikzcd}
+\]
+我们得到以下条件：
+\[  \alpha \circ g = h \circ \alpha  \]
+对于任何满足条件的等变 $\alpha \colon G *\; \to H *$：
+\[ \alpha \circ (G m) = (H m) \circ \alpha \]
+
+在这种情况下，Tannakian重构定理告诉我们：
+\[ \int_F \Set(F *, F *) \cong \cat M (*, *) \]
+换句话说，我们可以从其表示中恢复幺半群。
+
+我们将在更一般的陈述的背景下看到这个定理的证明，但这里是一般思路。在所有可能的表示中，有一个是满且忠实的。它的底层集合是同态集 $\cat M (*, *)$，幺半群的作用是后组合 $(m \circ -)$。唯一满足楔形条件的从这个集合到自身的函数是幺半群作用本身，它们与 $\cat M (*, *)$ 的元素一一对应。
+
+\subsection{Tannakian 重构的证明}
+
+幺半群重构是一个更一般定理的特殊情况，其中我们使用一个常规范畴（regular category）而不是单对象范畴。与幺半群的情况类似，我们将重构同态集（hom-set），只是这次它将是两个对象之间的常规同态集。我们将证明以下公式：
+\[ \int_{F \colon [\cat C, \Set]} \Set (F a, F b) \cong \cat C(a, b) \]
+技巧在于使用Yoneda引理来表示$F$的作用：
+\[ F a \cong [\cat C, \Set] ( \cat C (a ,-), F) \]
+对于$F b$也是如此。我们得到：
+\[ \int_{F \colon [\cat C, \Set]} \Set ([\cat C, \Set] ( \cat C (a ,-), F), [\cat C, \Set] ( \cat C (b ,-), F)) \]
+注意，这里的两个自然变换集是$[\cat C, \Set]$中的同态集。
+
+回忆一下Yoneda引理的推论，它适用于任何范畴$\cat A$：
+\[ [\cat A, \Set] (\cat A (x, -), \cat A (y, -)) \cong \cat A (y, x) \]
+我们可以用端（end）来表示它：
+\[ \int_{z \colon \cat C} \Set (\cat A (x, z), \cat A (y, z)) \cong \cat A (y, x) \]
+特别地，我们可以将$\cat A$替换为函子范畴$[\cat C, \Set]$。我们得到：
+\[ \int_{F \colon [\cat C, \Set]} \Set ([\cat C, \Set] ( \cat C (a ,-), F), [\cat C, \Set] ( \cat C (b ,-), F)) \cong [\cat C, \Set](\cat C (b ,-), \cat C (a ,-))\]
+然后我们可以再次对右边应用Yoneda引理，得到：
+\[ \cat C (a, b) \]
+这正是我们想要的结果。
+
+重要的是要理解函子范畴的结构如何通过楔条件（wedge condition）进入端。它通过自然变换来实现这一点。每当我们有两个函子之间的自然变换$\alpha \colon G \to H$时，以下图表必须交换：
+\[
+ \begin{tikzcd}
+ & \int_F \Set (F a, F b)
+ \arrow[dl, "\pi_G"']
+ \arrow[dr, "\pi_H"]
+ \\
+ \Set(G a, G b)
+ \arrow[dr, "{\Set(id, \alpha)}"'] && \Set (H a, H b)
+  \arrow[dl, "{\Set (\alpha, id)}"]
+\\
+ & \Set (G a, H b)
+ \end{tikzcd}
+\]
+
+为了获得一些关于Tannakian重构的直觉，你可以回忆一下$\Set$值函子可以解释为\index{证明相关子集}证明相关子集（proof-relevant subset）。一个函子$F \colon \cat C \to \Set$（一个共预层，co-presheaf）定义了（一个小范畴）$\cat C$的对象的一个子集。我们说一个对象$a$在该子集中，当且仅当$F a$非空。$F a$的每个元素都可以解释为这一点的证明。
+
+但是，除非所讨论的范畴是离散的，否则并非所有子集都对应于共预层。特别是，每当有一个箭头$f \colon a \to b$时，也存在一个函数$F f \colon F a \to F b$。根据我们的解释，这样的函数将每个证明$a$在由$F$定义的子集中的证明映射到$b$在该子集中的证明。因此，共预层定义了与范畴结构兼容的证明相关子集。
+
+让我们以同样的精神重新解释Tannakian重构。
+\[ \int_{F \colon [\cat C, \Set]} \Set (F a, F b) \cong \cat C(a, b) \]
+左边的一个元素是一个证明，表明对于每个与$\cat C$结构兼容的子集，如果$a$属于该子集，那么$b$也属于该子集。这只有在存在从$a$到$b$的箭头时才可能。
+
+\begin{exercise}
+将Tannakian重构的证明应用到上一节中的单对象范畴$\cat M$。
+\end{exercise}
+
+\subsection{Haskell 中的 Tannakian 重构}
+
+我们可以立即将这个结果翻译到 Haskell 中。我们将 end 替换为 \hask{forall}。左侧变为：
+\begin{haskell}
+forall f. Functor f => f a -> f b
+\end{haskell}
+而右侧是函数类型 \hask{a->b}。
+
+我们之前见过多态函数：它们是针对所有类型定义的函数，有时是针对某些类型类定义的。这里我们有一个针对所有函子定义的函数。它表示：给我一个包含 \hask{a} 的函子，我将生成一个包含 \hask{b} 的函子——无论你使用什么函子。实现这一点的唯一方法（使用参数多态）是，如果这个函数已经秘密捕获了一个类型为 \hask{a->b} 的函数，并使用 \hask{fmap} 应用它。
+
+事实上，同构的一个方向正是这样：捕获一个函数并在参数上使用 \hask{fmap}：
+\begin{haskell}
+toTannaka :: (a -> b) -> (forall f. Functor f => f a -> f b)
+toTannaka g fa = fmap g fa
+\end{haskell}
+另一个方向使用 Yoneda 技巧：
+\begin{haskell}
+fromTannaka :: (forall f. Functor f => f a -> f b) -> (a -> b)
+fromTannaka g a = runIdentity (g (Identity a))
+\end{haskell}
+其中\index{恒等函子}恒等函子定义为：
+\begin{haskell}
+data Identity a = Identity a 
+  
+runIdentity :: Identity a -> a
+runIdentity (Identity a) = a
+
+instance Functor Identity where
+  fmap g (Identity a) = Identity (g a)
+\end{haskell}
+
+这种重构可能看起来微不足道且毫无意义。为什么有人会想要用更复杂的类型替换函数类型 \hask{a->b}：
+\begin{haskell}
+type Getter a b = forall f. Functor f => f a -> f b
+\end{haskell}
+不过，将 \hask{a->b} 视为所有光学（optics）的前身是有启发性的。它是一个聚焦于 $a$ 的 $b$ 部分的透镜。它告诉我们，$a$ 以某种形式包含了足够的信息来构造一个 $b$。它是一个“获取器”或“访问器”。
+
+显然，函数可以组合。有趣的是，函子表示也可以组合，并且它们使用简单的函数组合进行组合，如以下示例所示：
+\begin{haskell}
+boolToStrGetter :: Getter Bool String
+boolToStrGetter = toTannaka (show) . toTannaka (bool (-1) 1)
+\end{haskell}
+其中：
+\begin{haskell}
+bool :: a -> a -> Bool -> a
+bool f _ False = f
+bool _ t True  = t
+\end{haskell}
+
+其他光学（optics）并不那么容易组合，但它们的函子（和 profunctor）表示可以。
+
+\subsection{伴随下的Tannakian重构}
+
+推广Tannakian重构的技巧在于在某些专门的函子范畴$\cat T$上定义end（我们稍后会将其应用于Tambara范畴）。
+
+假设我们在两个函子范畴$\cat T$和$[\cat C, \Set]$之间有自由/遗忘伴随$F \dashv U$：
+\[ \cat T (F Q, P) \cong  [\cat C, \Set] ( Q, U P )\]
+其中$Q$是$[\cat C, \Set]$中的函子，$P$是$\cat T$中的函子。
+
+我们Tannakian重构的起点是以下end：
+\[ \int_{P \colon \cat T} \Set \big((U P) a, (U P) s\big) \]
+由对象$a$参数化的映射$\cat T \to \Set$，由公式给出：
+\[ P \mapsto (U P) a \]
+这是\index{纤维函子}\emph{纤维函子}，因此end公式可以解释为两个纤维函子之间的自然变换集合。
+
+从概念上讲，纤维函子描述了一个对象的“无穷小邻域”。它将函子映射到集合，但更重要的是，它将自然变换映射到函数。这些函数探测了对象所处的环境。特别是，$\cat T$中的自然变换参与了定义end的楔条件。（在微积分中，层的茎起着非常相似的作用。）
+
+正如我们之前所做的那样，我们首先将Yoneda引理应用于协预层$(U P)$：
+\[ \int_{P \colon \cat T} \Set \Big([\cat C, \Set] \big( \cat C (a ,-), U P\big), [\cat C, \Set] \big( \cat C (s ,-), U P\big)\Big) \]
+我们现在可以使用伴随：
+\[ \int_{P \colon \cat T} \Set \Big(\cat T \big( F \cat C (a ,-), P\big), \cat T \big( F \cat C (s ,-), P\big)\Big) \]
+我们最终得到了函子范畴$\cat T$中两个自然变换之间的映射。我们可以使用Yoneda引理的推论来执行“积分”，得到：
+\[ \cat T\big( F \cat C (s ,-), F \cat C (a ,-) \big) \]
+我们可以再次应用伴随：
+\[ \Set \big( \cat C (s ,-), (U\circ F) \cat C (a ,-) \big) \]
+并再次应用Yoneda引理：
+\[ \big( (U\circ F) \cat C (a ,-) \big) s \]
+最后的观察是，伴随函子的复合$U \circ F$是函子范畴中的一个单子。让我们称这个单子为$\Phi$。结果是一个恒等式，它将作为profunctor光学的基础：
+\[ \int_{P \colon \cat T} \Set \big((U P) a, (U P) s\big) \cong \big( \Phi \cat C (a ,-) \big) s \]
+右边是单子$\Phi = U \circ F$在可表函子$\cat C (a, -)$上的作用，然后在$s$处求值。使用Yoneda函子符号，这可以写成$(\Phi \mathcal Y^a) s$。
+
+将其与之前的Tannakian重构公式进行比较，特别是如果我们将其重写为以下形式：
+\[ \int_{F \colon [\cat C, \Set]} \Set (F a, F s) \cong \cat C(a, -) s\]
+
+请记住，在推导光学时，我们将用$\cat C^{op} \times \cat C$中的对象对$\langle a, b \rangle$和$\langle s, t \rangle$替换$a$和$s$。我们的函子将变成profunctor。
+
+\section{Profunctor透镜}
+
+我们的目标是找到光学的函子表示。我们之前看到，例如，类型变化的透镜可以看作是$\mathbf{Lens}$范畴中的hom集。$\mathbf{Lens}$中的对象是来自某个笛卡尔范畴$\cat C$的对象对，从一个这样的对$\langle s, t \rangle$到另一个$\langle a, b \rangle$的hom集由coend公式给出：
+\[ \mathcal{L}\langle s, t\rangle \langle a, b \rangle = \int^{c} \mathcal{C}(s, c \times a) \times  \mathcal{C}(c \times b, t) \]
+注意，这个公式中的hom集对可以看作是积范畴$\cat C^{op} \times \cat C$中的单个hom集：
+\[  \mathcal{L}\langle s, t\rangle \langle a, b \rangle =  \int^{c} (\cat C^{op} \times \cat C )(c \bullet \langle a, b \rangle, \langle s, t \rangle)  \]
+其中我们定义$c$在$\langle a, b \rangle$上的作用为：
+\[ c \bullet \langle a, b \rangle = \langle c \times a, c \times b \rangle \]
+这是$\cat C^{op} \times \cat C$在自身上的更一般作用的对角线部分的简写符号，由下式给出：
+ \[ \langle c, c' \rangle \bullet \langle a, b \rangle = \langle c \times a, c' \times b \rangle \]
+
+这表明，为了表示这样的光学，我们应该考虑在范畴$\cat C^{op} \times \cat C$上的协预层，即我们应该考虑profunctor表示。
+
+\subsection{同构（Iso）}
+作为这个想法的快速测试，让我们将重建公式应用于简单情况 $\cat T = [\cat C^{op} \times \cat C, \Set]$，其中没有额外的结构。在这种情况下，我们不需要使用遗忘函子（forgetful functors）或单子（monad）$\Phi$，我们只需直接应用Tannakian重建：
+\[  \mathcal{O}\langle s, t\rangle \langle a, b \rangle =\int_{P \colon \cat T} \Set \big(P \langle a, b\rangle, P \langle s, t\rangle \big) \cong \big( (\cat C^{op} \times \cat C) (\langle a, b\rangle ,-) \big) \langle s, t\rangle \]
+右侧的表达式为：
+\[ (\cat C^{op} \times \cat C) (\langle a, b\rangle , \langle s, t\rangle) = \cat C (s, a) \times \cat C (b, t) \]
+
+这种光学结构在Haskell中被称为 \hask{Iso}（或适配器）：
+\begin{haskell}
+type Iso s t a b = (s -> a, b -> t)
+\end{haskell}
+并且它确实有一个对应于以下端（end）的profunctor表示：
+\begin{haskell}
+type IsoP s t a b = forall p. Profunctor p => p a b -> p s t
+\end{haskell}
+
+给定一对函数，很容易构造这个profunctor多态函数：
+\begin{haskell}
+toIsoP :: (s -> a, b -> t) -> IsoP s t a b
+toIsoP (f, g) = dimap f g
+\end{haskell}
+这简单地说明，任何profunctor都可以用来提升一对函数。
+
+相反，我们可以提出一个问题：一个单一的多态函数如何将集合 $P \langle a, b \rangle$ 映射到集合 $P \langle s, t \rangle$，对于\emph{每一个}可以想象的profunctor？这个函数对profunctor的唯一了解是它可以提升一对函数。因此，它必须是一个闭包，要么包含要么能够生成一对函数 \hask{(s -> a, b -> t)}。
+
+\begin{exercise}
+实现以下函数：
+\begin{haskell}
+fromIsoP :: IsoP s t a b -> (s -> a, b -> t)
+\end{haskell}
+提示：证明这是一个profunctor：
+\begin{haskell}
+newtype Adapter a b s t = Ad (s -> a, b -> t)
+\end{haskell}
+并使用一对恒等函数构造 \hask{Adapter a a s s}。
+\end{exercise}
+
+\subsection{Profunctors 和 lenses（Profunctors 和透镜）}
+
+让我们尝试将相同的逻辑应用于透镜（lenses）。我们需要找到一类 profunctors 来插入到我们的 profunctor 表示中。假设遗忘函子（forgetful functor）$U$ 仅遗忘额外的结构但不改变集合，因此集合 $P \langle a, b \rangle$ 与集合 $(U P) \langle a, b \rangle$ 相同。
+
+让我们从存在表示（existential representation）开始。我们有一个对象 $c$ 和一对函数：
+\[  \langle f, g \rangle \colon \cat C(s, c \times a) \times \cat C(c \times b, t) \]
+我们希望构建一个 profunctor 表示，因此我们需要能够将集合 $P \langle a, b \rangle$ 映射到集合 $P \langle s, t \rangle$。我们可以通过提升这两个函数来得到 $P \langle s, t \rangle$，但前提是从 $P \langle c \times a, c \times b \rangle$ 开始。实际上：
+\[ P \langle f, g \rangle \colon P \langle c \times a, c \times b \rangle \to P \langle s, t \rangle \]
+我们所缺少的是映射：
+\[ P \langle a, b \rangle \to P \langle c \times a, c \times b \rangle \]
+而这正是我们需要从我们的 profunctor 类中要求的额外结构。
+
+\subsection{Tambara 模}
+
+配备以下变换族的函子 $P$ 被称为 \emph{Tambara 模}：
+\[ \alpha_{\langle a, b\rangle, c} \colon P \langle a, b \rangle \to P \langle c \times a, c \times b \rangle \]
+
+我们希望这个变换族在 $a$ 和 $b$ 上是自然的，但对于 $c$ 应该要求什么？$c$ 的问题在于它出现了两次，一次在逆变位置，一次在协变位置。因此，如果我们希望与像 $h \colon c \to c'$ 这样的箭头良好地交互，我们必须修改自然性条件。我们可以考虑一个更一般的函子 $P \langle c' \times a, c \times b \rangle$，并将 $\alpha$ 视为生成其对角线元素，即 $c'$ 与 $c$ 相同的元素。
+
+如果对于任意 $f \colon c \to c'$，以下图表交换，则称两个函子 $P$ 和 $Q$ 的对角部分之间的变换 $\alpha$ 为 \index{对角自然变换}\emph{对角自然变换}（\emph{di}-agonally natural）：
+
+\[
+ \begin{tikzcd}
+ & P \langle c', c \rangle
+ \arrow[dl, "{P \langle f, c \rangle}"']
+ \arrow[dr, "{P \langle c', f \rangle}"]
+ \\
+ P \langle c, c \rangle 
+  \arrow[d, "\alpha_c"']
+ && P \langle c', c' \rangle
+ \arrow[d, "\alpha_{c'}"]
+ \\
+ Q \langle c, c \rangle
+   \arrow[dr, "{P \langle c, f \rangle}"']
+ &&  Q \langle c', c' \rangle
+ \arrow[dl,"{P \langle f, c \rangle}"]
+\\
+&Q \langle c, c' \rangle
+ \end{tikzcd}
+\]
+（我使用了常见的简写 $P \langle f, c \rangle$，类似于 whiskering，表示 $P \langle f, id_c \rangle$。）
+
+在我们的情况下，对角自然性条件简化为：
+\[
+ \begin{tikzcd}
+ & P \langle a, b \rangle
+ \arrow[dl, "{\alpha_{\langle a, b \rangle, c}}"']
+ \arrow[dr, "{\alpha_{\langle a, b \rangle, c'}}"]
+ \\
+ P \langle c \times a, c \times b \rangle
+   \arrow[dr, "{P \langle c \times a, f \times b \rangle}"']
+ &&  P \langle c' \times a, c'  \times b\rangle
+ \arrow[dl,"{P \langle f \times b, c \times b \rangle}"]
+\\
+&P \langle c \times a, c' \times b \rangle
+ \end{tikzcd}
+\]
+（这里，$P \langle f \times b, c \times b \rangle$ 表示 $P \langle f \times id_b, id_{c \times b} \rangle$。）
+
+Tambara 模还有一个一致性条件：它们必须保持幺半结构。在笛卡尔范畴中，乘以 $c$ 的操作是有意义的：我们必须为任何对象对提供一个积，并且我们希望有一个终端对象作为乘法的单位。Tambara 模必须尊重单位并保持乘法。对于单位（终端对象），我们施加以下条件：
+\[ \alpha_{\langle a, b \rangle, 1} = id _{P \langle a, b \rangle}\]
+对于乘法，我们有：
+\[ \alpha_{\langle a, b \rangle, c' \times c} \cong  \alpha_{\langle c \times a, c \times b \rangle, c'} \circ  \alpha_{\langle a, b \rangle, c}\]
+或者，图示为：
+\[
+ \begin{tikzcd}
+ P \langle a, b \rangle
+ \arrow[rr, "{\alpha_{\langle a, b \rangle, c' \times c } }"]
+ \arrow[rdd, "{ \alpha_{\langle a, b \rangle, c}}"']
+ &&
+ P \langle c' \times c \times a, c' \times c \times b \rangle
+ \\
+ \\
+ & P \langle c \times a, c \times b \rangle
+  \arrow[ruu, "{\alpha_{\langle c \times a, c \times b \rangle, c'}}"']
+\end{tikzcd}
+\]
+（注意，积在同构意义下是结合的，因此图中有一个隐藏的结合子。）
+
+由于我们希望 Tambara 模形成一个范畴，我们必须定义它们之间的态射。这些是保持额外结构的自然变换。假设我们有两个 Tambara 模之间的自然变换 $\rho$，即 $\rho \colon (P, \alpha) \to (Q, \beta) $。我们可以先应用 $\alpha$ 再应用 $\rho$，或者先应用 $\rho$ 再应用 $\beta$。我们希望结果相同：
+\[
+ \begin{tikzcd}
+  P \langle a, b \rangle
+ \arrow[d, "{ \rho_{\langle a, b \rangle}}"']
+ \arrow[r, "{ \alpha_{\langle a, b \rangle, c}}"]
+  &  P \langle c \times a, c \times b \rangle
+  \arrow[d, "{ \rho_{\langle c \times a, c \times b \rangle}}"]
+\\
+   Q \langle a, b \rangle
+ \arrow[r, "{ \beta_{\langle a, b \rangle, c}}"]
+ &  Q \langle c \times a, c \times b \rangle
+ \end{tikzcd}
+\]
+请记住，Tambara 范畴的结构编码在这些自然变换中。它们将通过楔条件确定进入函子透镜定义的端的形状。
+
+\subsection{Profunctor透镜}
+
+现在我们对Tambara模与透镜的关系有了一些直观理解，让我们回到主要公式：
+\[  \mathcal{L}\langle s, t\rangle \langle a, b \rangle =\int_{P \colon \cat T} \Set \big((U P) \langle a, b\rangle, (U P) \langle s, t\rangle \big) \cong \big( \Phi (\cat C^{op} \times \cat C) (\langle a, b\rangle ,-) \big) \langle s, t\rangle \]
+这次我们是在Tambara范畴上取end。唯一缺失的部分是单子$\Phi = U \circ F$或自由生成Tambara模的函子$F$。
+
+事实证明，与其猜测单子，不如猜测余单子更容易。在profunctor范畴中存在一个余单子，它取一个profunctor $P$并生成另一个profunctor $\Theta P$。公式如下：
+\[(\Theta P) \langle a, b \rangle = \int_c P \langle c \times a, c \times b \rangle \]
+你可以通过实现$\varepsilon$和$\delta$（\hask{extract}和\hask{duplicate}）来验证这确实是一个余单子。例如，$\varepsilon$使用终端对象（笛卡尔积的单位）的投影$\pi_1$将$\Theta P \to P$映射。
+
+这个余单子的有趣之处在于它的余代数是Tambara模。同样，这些是将profunctor映射到profunctor的余代数。它们是自然变换$P \to \Theta P$。我们可以将这样的自然变换写为end的一个元素：
+\[\int_{a, b} \Set \big (P \langle a, b \rangle, (\Theta P) \langle a, b \rangle \big) = \int_{a, b} \int_c \Set \big( P\langle a, b \rangle , P \langle c \times a, c \times b \rangle \big) \]
+我使用了hom-函子的连续性来取出$c$上的end。得到的end编码了一组自然（在$c$上是双自然的）变换，这些变换定义了一个Tambara模：
+\[ \alpha_{\langle a, b\rangle, c} \colon P \langle a, b \rangle \to P \langle c \times a, c \times b \rangle \]
+事实上，这些余代数是\emph{余单子}余代数，即它们与余单子$\Theta$兼容。换句话说，Tambara模形成了余单子$\Theta$的Eilenberg-Moore余代数范畴。
+
+$\Theta$的左伴随是一个单子$\Phi$，其公式为：
+\[(\Phi P)  \langle s, t \rangle = \int^{u, v, c} (\cat C^{op} \times \cat C) \big(c \bullet \langle u, v\rangle , \langle s, t \rangle\big) \times P \langle u, v \rangle \]
+其中我使用了简写符号：
+\[ (\cat C^{op} \times \cat C) \big(c \bullet \langle u, v\rangle , \langle s, t \rangle\big) = \cat C(s, c \times u) \times \cat C(c \times v, t) \]
+
+这个伴随关系可以通过一些end/coend操作轻松验证：从$\Phi P$到某个profunctor $Q$的映射可以写为一个end。然后可以使用hom-函子的共连续性取出$\Phi$中的coend。最后，应用ninja-Yoneda引理生成到$\Theta Q$的映射。我们得到：
+\[ [(\cat C^{op} \times \cat C, \Set] (P \Phi, Q) \cong [(\cat C^{op} \times \cat C, \Set] (P, \Theta Q) \]
+
+将$Q$替换为$P$，我们立即看到$\Phi$的代数的集合与$\Theta$的余代数的集合同构。事实上，它们是$\Phi$的单子代数。这意味着单子$\Phi$的Eilenberg-Moore范畴与Tambara范畴相同。
+
+回想一下，Eilenberg-Moore构造将单子分解为自由/遗忘伴随。这正是我们在推导profunctor光学公式时寻找的伴随关系。
+
+剩下的就是评估$\Phi$在可表函子上的作用：
+\[ \big( \Phi (\cat C^{op} \times \cat C) (\langle a, b\rangle ,-) \big) \langle s, t\rangle = \int^{u, v, c} (\cat C^{op} \times \cat C) \big(c \bullet \langle u, v\rangle , \langle s, t \rangle \big) \times  (\cat C^{op} \times \cat C) \big(\langle a, b\rangle , \langle u, v\rangle \big)\]
+应用co-Yoneda引理，我们得到：
+\[ \int^c (\cat C^{op} \times \cat C) \big(c \bullet \langle a, b\rangle , \langle s, t \rangle\big) = \int^c \cat C(s, c \times a) \times \cat C (c \times b, t)\]
+这正是透镜的存在表示。
+
+\subsection{Haskell 中的 Profunctor 透镜}
+
+为了在 Haskell 中定义 profunctor 表示，我们引入了一类关于笛卡尔积的 Tambara 模块的 profunctor（稍后我们会看到更一般的 Tambara 模块）。在 Haskell 库中，这个类被称为 \hask{Strong}。它在文献中也以 \hask{Cartesian} 出现：
+\begin{haskell}
+class Profunctor p => Cartesian p where
+  alpha :: p a b -> p (c, a) (c, b)
+\end{haskell}
+多态函数 \hask{alpha} 具有由参数多态性保证的所有相关自然性属性。
+
+profunctor 透镜只是对在 \hask{Cartesian} profunctor 中多态的函数类型的类型同义词：
+\begin{haskell}
+type LensP s t a b = forall p. Cartesian p => p a b -> p s t
+\end{haskell}
+
+实现这样的函数的最简单方法是从透镜的存在表示开始，并将 \hask{alpha} 和 \hask{dimap} 应用于 profunctor 参数：
+\begin{haskell}
+toLensP :: LensE s t a b -> LensP s t a b
+toLensP (LensE from to) = dimap from to . alpha
+\end{haskell}
+
+因为 profunctor 透镜只是函数，所以我们可以像这样组合它们：
+\begin{haskell}
+lens1 :: LensP s t x y 
+-- p s t -> p x y
+lens2 :: LensP x y a b 
+-- p x y -> p a b
+lens3 :: LensP s t a b 
+-- p s t -> p a b
+lens3 = lens2 . lens1
+\end{haskell}
+
+从 profunctor 表示到透镜的 get/set 表示的逆向映射也是可能的。为此，我们需要猜测可以输入到 \hask{LensP} 中的 profunctor。事实证明，当我们固定类型对 \hask{a} 和 \hask{b} 时，透镜的 get/set 表示就是这样的 profunctor。我们定义：
+\begin{haskell}
+data FlipLens a b s t = FlipLens (s -> a) (s -> b -> t)
+\end{haskell}
+很容易证明它确实是一个 profunctor：
+\begin{haskell}
+instance Profunctor (FlipLens a b) where
+  dimap f g (FlipLens get set) = FlipLens (get . f) (fmap g . set . f)
+\end{haskell}
+不仅如此，它还是一个 \hask{Cartesian} profunctor：
+\begin{haskell}
+instance Cartesian (FlipLens a b) where
+  alpha(FlipLens get set) = FlipLens get' set'
+    where get' = get . snd
+          set' = \(x, s) b -> (x, set s b)
+\end{haskell}
+我们现在可以用一个简单的 getter 和 setter 对初始化 \hask{FlipLens}，并将其输入到我们的 profunctor 表示中：
+\begin{haskell}
+fromLensP :: LensP s t a b -> (s -> a, s -> b -> t)
+fromLensP pp = (get', set')
+  where FlipLens get' set' = pp (FlipLens id (\s b -> b))
+\end{haskell}
+
+\section{一般光学}
+Tambara 模最初是为任意具有张量积 $\otimes$ 和单位对象 $I$ 的幺半范畴定义的\footnote{事实上，Tambara 模最初是为在向量空间上富集的范畴定义的}。它们的结构映射具有以下形式：
+\[ \alpha_{\langle a, b\rangle, c} \colon P \langle a, b \rangle \to P \langle c \otimes a, c \otimes b \rangle \]
+你可以很容易地验证，所有的相干律都直接适用于这种情况，并且 profunctor 光学的推导过程无需改变。
+
+\subsection{棱镜}
+
+从编程的角度来看，有两个明显的幺半结构值得探索：积和和。我们已经看到积产生了透镜（lenses）。和，或者说余积，则产生了棱镜（prisms）。
+
+我们只需在透镜的定义中将积替换为和，就可以得到棱镜的存在表示：
+\[ \mathcal{P}\langle s, t\rangle \langle a, b \rangle = \int^{c} \mathcal{C}(s, c + a) \times  \mathcal{C}(c + b, t) \]
+为了简化这个表达式，注意到从和映射出去等价于映射的积：
+\[ \int^{c} \mathcal{C}(s, c + a) \times  \mathcal{C}(c + b, t) \cong  \int^{c} \mathcal{C}(s, c + a) \times  \mathcal{C}(c, t) \times  \mathcal{C}(b, t) \]
+利用 co-Yoneda 引理，我们可以去掉 coend 得到：
+\[ \mathcal{C}(s, t + a) \times  \mathcal{C}(b, t) \]
+
+在 Haskell 中，这定义了一对函数：
+\begin{haskell}
+match :: s -> Either t a
+build :: b -> t
+\end{haskell}
+
+为了理解这一点，让我们首先翻译棱镜的存在形式：
+\begin{haskell}
+data Prism s t a b where
+  Prism :: (s -> Either c a) -> (Either c b -> t) -> Prism s t a b
+\end{haskell}
+这里 \hask{s} 要么包含焦点 \hask{a}，要么包含余项 \hask{c}。相反，\hask{t} 可以从新的焦点 \hask{b} 或余项 \hask{c} 构建。
+
+这种逻辑反映在转换函数中：
+\begin{haskell}
+toMatch :: Prism s t a b -> (s -> Either t a)
+toMatch (Prism from to) s =
+  case from s of
+    Left  c -> Left (to (Left c))
+    Right a -> Right a
+\end{haskell}
+
+\begin{haskell}
+toBuild :: Prism s t a b -> (b -> t)
+toBuild (Prism from to) b = to (Right b)
+\end{haskell}
+
+\begin{haskell}
+toPrism :: (s -> Either t a) -> (b -> t) -> Prism s t a b
+toPrism match build = Prism from to
+  where
+    from = match
+    to (Left  c) = c
+    to (Right b) = build b
+\end{haskell}
+
+棱镜的 profunctor 表示与透镜的几乎相同，只是将积替换为和。
+
+在 Haskell 库中，和类型的 Tambara 模类称为 \hask{Choice}，在文献中称为 \hask{Cocartesian}：
+\begin{haskell}
+class Profunctor p => Cocartesian p where
+  alpha' :: p a b -> p (Either c a) (Either c b)
+\end{haskell}
+profunctor 表示是一个多态函数类型：
+\begin{haskell}
+type PrismP s t a b = forall p. Cocartesian p => p a b -> p s t
+\end{haskell}
+
+从存在棱镜的转换与透镜的转换几乎相同：
+\begin{haskell}
+toPrismP :: Prism s t a b -> PrismP s t a b
+toPrismP (Prism from to) = dimap from to . alpha'
+\end{haskell}
+
+同样，profunctor 棱镜使用函数组合进行组合。
+
+\subsection{遍历}
+遍历（traversal）是一种可以同时聚焦多个焦点的光学。例如，想象你有一棵树，它可以有零个或多个类型为 \hask{a} 的叶子。遍历应该能够获取这些节点的列表。它还应该允许你用一个新的列表替换这些节点。这里的问题是：提供替换的列表的长度必须与节点的数量匹配，否则会发生不好的事情。
+
+类型安全的遍历实现需要我们跟踪列表的大小。换句话说，它需要依赖类型。
+
+在 Haskell 中，（非类型安全的）遍历通常写为：
+\begin{haskell}
+type Traversal s t a b = s -> ([b] -> t, [a])
+\end{haskell}
+并且理解这两个列表的大小由 \hask{s} 决定，并且必须相同。
+
+当将遍历翻译为范畴论语言时，我们将使用列表大小的和来表达这个条件。大小为 $n$ 的计数列表是一个 $n$ 元组，或者 $a^n$ 的一个元素，因此我们可以写：
+\[ \mathbf{Tr} \langle s, t\rangle \langle a, b \rangle = \Set \big( s, \sum_n (\Set (b^n, t) \times a^n) \big) \]
+我们将遍历解释为一个函数，给定一个源 $s$，它产生一个隐藏 $n$ 的存在类型。它表示存在一个 $n$ 和一个由函数 $b^n \to t$ 和 $n$ 元组 $a^n$ 组成的对。
+
+遍历的存在形式必须考虑到不同 $n$ 的余项原则上会有不同的类型。例如，你可以将一棵树分解为一个 $n$ 元组的叶子 $a^n$ 和带有 $n$ 个洞的余项 $c_n$。因此，遍历的正确存在表示必须涉及对所有由自然数索引的序列 $c_n$ 的 coend：
+\[ \mathbf{Tr} \langle s, t\rangle \langle a, b \rangle = \int^{c_n} \cat C (s, \sum_m c_m \times a^m) \times \cat C (\sum_k c_k \times b^k, t) \]
+这里的和是 $\cat C$ 中的余积。
+
+看待序列 $c_n$ 的一种方式是将它们解释为纤维化。例如，在 $\Set$ 中，我们将从一个集合 $C$ 和一个投影 $p \colon C \to \mathbb N$ 开始，其中 $\mathbb N$ 是自然数的集合。类似地，$a^n$ 可以解释为 $a$ 上的自由幺半群（$a$ 的列表集合）的纤维化，投影提取列表的长度。
+
+或者我们可以将 $c_n$ 视为从自然数集合到 $\cat C$ 的映射。事实上，我们可以将自然数视为一个离散范畴 $\cat N$，在这种情况下，$c_n$ 是函子 $\cat N \to \cat C$。
+
+\[ \mathbf{Tr} \langle s, t\rangle \langle a, b \rangle = \int^{c \colon [\cat N, \cat C]} \cat C (s, \sum_m c_m \times a^m) \times \cat C (\sum_k c_k \times b^k, t) \]
+
+为了展示这两种表示的等价性，我们首先将和映射重写为映射的积：
+\[\int^{c \colon [\cat N, \cat C]} \cat C (s, \sum_m c_m \times a^m) \times \prod_k \cat C (c_k \times b^k, t) \]
+然后使用柯里化伴随：
+\[\int^{c \colon [\cat N, \cat C]} \cat C (s, \sum_m c_m \times a^m) \times \prod_k \cat C (c_k,  [b^k, t]) \]
+这里，$[b^k, t]$ 是内部 hom，它是指数对象 $t^{b^k}$ 的另一种表示。
+
+下一步是认识到这个公式中的积表示 $[\cat N, \cat C]$ 中的一组自然变换。事实上，我们可以将其写为一个 end：
+ \[ \prod_k \cat C (c_k,  [b^k, t] \cong \int_{k : \cat N} C (c_k,  [b^k, t]) \]
+这是因为在离散范畴上的 end 只是一个积。或者，我们可以将其写为函子范畴中的 hom 集：
+\[ [\cat N, \cat C](c_{-}, [b^{-}, t]) \]
+用占位符替换两个函子的参数：
+\[ k \mapsto c_k \]
+\[ k \mapsto [b^k, t] \]
+
+我们现在可以在函子范畴 $[\cat N, \cat C]$ 中使用 co-Yoneda 引理：
+\[\int^{c \colon [\cat N, \cat C]} \cat C (s, \sum_m c_m \times a^m) \times  [\cat N, \cat C]\big(c_{-}, [b^{-}, t]\big) \cong \cat C(s, \sum_m [b^m, t] \times a^m)\]
+这个结果比我们最初的公式更一般，但当限制在集合范畴时，它会变成原来的公式。
+
+为了推导遍历的 profunctor 表示，我们应该更仔细地观察所涉及的变换类型。我们定义函子 $c \colon [\cat N, \cat C]$ 在 $a$ 上的作用为：
+\[ c \bullet a = \sum_m c_m \times a^m \]
+这些作用可以通过使用分配律展开公式来组合：
+\[ c \bullet (c' \bullet a) = \sum_m c_m \times (\sum_n c'_n \times a^n)^m \]
+如果目标范畴是 $\Set$，这等价于以下 Day 卷积（对于非 $\Set$ 范畴，可以使用 Day 卷积的富集版本）：
+\[ (c \star c')_k = \int^{m, n} \cat N (m + n, k) \times c_m \times c'_n \]
+这为范畴 $[\cat N, \cat C]$ 提供了幺半结构。
+
+遍历的存在表示可以用这个幺半范畴在 $\cat C$ 上的作用来写：
+\[ \mathbf{Tr} \langle s, t\rangle \langle a, b \rangle = \int^{c \colon [\cat N, \cat C]} \cat C (s, c \bullet a) \times \cat C (c \bullet b, t) \]
+
+为了推导遍历的 profunctor 表示，我们必须将 Tambara 模推广到幺半范畴的作用：
+\[ \alpha_{\langle a, b\rangle, c} \colon P \langle a, b \rangle \to P \langle c \bullet a, c \bullet b \rangle \]
+事实证明，profunctor 光学的原始推导仍然适用于这些广义的 Tambara 模，并且遍历可以写为多态函数：
+\[  \mathbf{Tr}\langle s, t \rangle \langle a, b \rangle 
+ =\int_{P \colon \cat T} \Set \big((U P) \langle a, b\rangle, (U P) \langle s, t\rangle \big) \]
+其中 end 是在广义 Tambara 模上取的。
+
+\section{混合光学}
+
+每当我们有一个幺半范畴（monoidal category）$\cat M$ 作用于范畴 $\cat C$ 时，我们可以定义相应的光学（optic）。具有这种作用的范畴被称为\index{actegory}\emph{作用范畴}（actegory）。我们可以更进一步，考虑两个独立的作用。假设 $\cat M$ 可以同时作用于 $\cat C$ 和 $\cat D$。我们将使用相同的符号表示这两个作用：
+\[ \bullet \colon \cat M \times \cat C \to \cat C \]
+\[ \bullet \colon \cat M \times \cat D \to \cat D \]
+然后我们可以定义\index{mixed optics}\emph{混合光学}（mixed optics）为：
+\[ \mathcal{O} \langle s, t \rangle \langle a, b \rangle = \int^{m \colon \cat M} \cat C(s, m \bullet a) \times \cat D(m \bullet b, t) \]
+这些混合光学在 profunctor 的表示下可以表示为：
+\[ P \colon \cat C ^{op} \times \cat D \to \Set \]
+以及使用两个独立作用的相应 Tambara 模：
+\[ \alpha_{\langle a, b\rangle, m} \colon P \langle a, b \rangle \to P \langle m \bullet a, m \bullet b \rangle \]
+其中 $a$ 是 $\cat C$ 的对象，$b$ 是 $\cat D$ 的对象，$m$ 是 $\cat M$ 的对象。
+
+\begin{exercise}
+当其中一个范畴是终端范畴时，笛卡尔积作用的混合光学是什么？如果第一个范畴是 $\cat C^{op} \times \cat C$ 而第二个是终端范畴，情况又如何？
+\end{exercise}
+
+\end{document}

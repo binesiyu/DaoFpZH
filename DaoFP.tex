@@ -1,0 +1,181 @@
+\documentclass[11pt, book]{memoir}
+
+\settrims{0pt}{0pt} % 页面与纸张尺寸相同
+\settypeblocksize{*}{42.0pc}{*} % {高度}{宽度}{比例}
+\setlrmargins{*}{*}{1} % {书脊}{边缘}{比例}
+\setulmarginsandblock{1in}{1in}{*} % 计算版心高度
+\setheadfoot{\onelineskip}{2\onelineskip} % {页眉高度}{页脚距离}
+\setheaderspaces{*}{1.5\onelineskip}{*} % {页眉下沉}{页眉间距}{比例}
+\checkandfixthelayout
+% 设置中文主字体（一定要支持中文）
+
+% \setCJKmainfont{DejaVuSansMono YaHei NF}  % 或者 STFangsong、STSong、Source Han Serif SC 等
+% \setCJKmainfont{PingFang SC}  % 或者 STFangsong、STSong、Source Han Serif SC 等
+% \setCJKmainfont{PingFang SC}  % 或者 STFangsong、STSong、Source Han Serif SC 等
+% \setCJKmainfont[
+%   ItalicFont = DejaVuSansMono YaHei NF,
+%   BoldItalicFont = DejaVuSansMono YaHei NF
+% ]{PingFang SC}
+% 设置中文字体及其斜体（手动指定伪斜体）
+\usepackage[scheme=plain]{ctex} % ✅ 需要加载 ctex
+\setCJKlinespacing{2} % 行距倍数，例如 2 倍
+\usepackage{xeCJK}
+\usepackage{unicode-math} % 专管数学字体
+\setmainfont{Times New Roman}
+% \setmathfont{DejaVuSansMono YaHei NF} % 避免用中文字体做数学
+\setmathfont{STIX Two Math} % 避免用中文字体做数学
+\setCJKlinespacing{2.0} % 设置中文行距为字体的 1.8 倍
+\linespread{1.5}         % 设置整个文档的行距（中英文）
+% 设置中英间距为 0.4em
+% \setlength{\XeCJKglue}{0.4em}
+% \XeCJKsetup{CJKmathglue = true}  % 开启公式左右加间距
+
+\chapterstyle{bianchi}
+\newcommand{\titlefont}{\normalfont\Huge\bfseries}
+\renewcommand{\chaptitlefont}{\titlefont}
+
+\usepackage{subfiles}
+\usepackage{makeidx}
+
+\usepackage{amsfonts}
+\usepackage{amssymb}  
+\usepackage{amsthm} 
+\usepackage{amsmath} 
+\usepackage{tikz-cd}
+\usetikzlibrary{backgrounds}
+\usepackage{float}
+\usepackage{xcolor}
+% \usepackage{stix}
+\usepackage{microtype}
+
+\usepackage{minted}
+\usepackage{etoolbox}
+
+\usepackage[pdftex, bookmarksnumbered]{hyperref}
+
+\hypersetup{
+  colorlinks,
+  linkcolor={red!40!black},
+  citecolor={red!40!black},
+  urlcolor={blue!75!black}
+}
+
+\newtheorem{exercise}{Exercise}[section]
+\newcommand{\exinline}[1]{(\refstepcounter{exercise}Exercise~\theexercise\label{#1})}
+
+\newcommand{\cat}[1]{\mathcal{#1}} % 通用范畴
+\newcommand{\Cat}[1]{\mathbf{#1}} % 命名范畴
+\newcommand{\Set}{\Cat{Set}} % 集合范畴
+\newcommand{\mathvar}[1]{\mathop{\text{#1}}} % 多字符变量名
+
+\DeclareRobustCommand{\hask}[1]{%
+  \ifmmode
+    \text{\texttt{#1}}%
+  \else
+    \mintinline[bgcolor=black!3]{Haskell}{#1}%
+  \fi
+}
+\newenvironment{haskell}
+  {\VerbatimEnvironment
+         \fvset{formatcom=\upshape} % 在此环境中使用正体
+  	\begin{minted}[escapeinside=??, mathescape=true, tabsize=1, bgcolor=black!3, xleftmargin=3pt ]{Haskell}}
+  {\end{minted}}
+\makeatletter
+% 移除框前后的 \medskip
+\patchcmd{\minted@colorbg}{\medskip}{}{}{}
+\patchcmd{\endminted@colorbg}{\medskip}{}{}{}
+\makeatother
+
+% 用于同构的透镜括号
+\newcommand{\llens}{\mathopen{[\!(}}
+\newcommand{\rlens}{\mathclose{)\!]}}
+
+
+\makeindex
+
+\begin{document}
+\setcounter{tocdepth}{4}
+\setcounter{secnumdepth}{4}
+\frontmatter
+
+\title{\huge 函数式编程之道}
+\author{\Large Bartosz Milewski }
+
+\date{\vfill (最后更新: \today)}
+
+\maketitle
+
+\tableofcontents
+
+\clearpage
+
+\section{前言}
+
+大多数编程教材，遵循Brian Kernighan的传统，以“Hello World!”开始。想要立即获得让计算机执行命令并打印这些著名文字的满足感是很自然的。但真正掌握计算机编程远不止于此，急于求成可能只会给你一种虚假的力量感，而实际上你只是在模仿大师。如果你的目标仅仅是学习一项有用且高薪的技能，那么尽管去写你的“Hello World!”程序吧。有大量的书籍和课程可以教你用任何你选择的语言编写代码。然而，如果你真的想触及编程的本质，你需要耐心和坚持。
+
+范畴论是数学的一个分支，它提供了与编程实践经验相一致的抽象。借用克劳塞维茨的话：编程只是数学以其他方式的延续。许多范畴论的复杂概念在通过数据类型和函数解释时，对程序员来说变得显而易见。从这个意义上说，范畴论可能对程序员来说比专业数学家更容易理解。
+
+当我遇到新的范畴论概念时，我经常会在维基百科或nLab上查找它们，或者重新阅读Mac Lane或Kelly的章节。这些都是很好的资源，但它们需要一些前置知识以及填补空白的能力。本书的目标之一就是提供继续学习范畴论所需的引导。
+
+范畴论和计算机科学中有许多民间知识在文献中无处可寻。在枯燥的定义和定理中获取有用的直觉是非常困难的。我尽可能提供了缺失的直觉，并不仅解释了“是什么”，还解释了“为什么”。
+
+本书的标题暗指Benjamin Hoff的《The Tao of Pooh》和Robert Pirsig的《Zen and the Art of Motorcycle Maintenance》，这两本书都是西方人试图吸收东方哲学元素的尝试。粗略地说，范畴论之于编程，正如道\footnote{道是Tao的现代拼写}之于西方哲学。许多范畴论的定义在初次阅读时毫无意义，但随着时间的推移，你会学会欣赏它们的深刻智慧。如果要用一句话总结范畴论，那就是：“事物通过它们与宇宙的关系来定义。”
+
+\subsection{集合论}
+
+传统上，集合论被认为是数学的基础，尽管最近类型论正在争夺这一地位。从某种意义上说，集合论是数学的汇编语言，因此包含了许多实现细节，这些细节常常掩盖了高层次思想的呈现。
+
+范畴论并不试图取代集合论，它通常用于构建抽象，这些抽象后来用集合来建模。事实上，范畴论的基本定理——Yoneda引理，将范畴与它们在集合论中的模型联系起来。我们可以在计算机图形学中找到有用的直觉，在那里我们构建和操纵抽象世界，最终将其投影并采样到数字显示器上。
+
+研究范畴论并不需要精通集合论。但熟悉一些基本概念是必要的。例如，集合包含元素的概念。我们说，给定一个集合$S$和一个元素$a$，询问$a$是否是$S$的元素是有意义的。这个陈述写作$a \in S$（$a$是$S$的成员）。也可能存在一个不包含任何元素的空集。
+
+集合元素的重要属性是它们可以比较相等性。给定两个元素$a \in S$和$b \in S$，我们可以问：$a$等于$b$吗？或者我们可以强加条件$a = b$，如果$a$和$b$是通过两种不同的方法选择集合$S$的元素的结果。集合元素的相等性是范畴论中所有交换图的本质。
+
+两个集合$S \times T$的笛卡尔积定义为所有元素对$\langle s, t\rangle$的集合，其中$s \in S$且$t \in T$。
+
+函数$f \colon S \to T$，从称为$f$的域（domain）的源集合到称为$f$的陪域（codomain）的目标集合，也定义为一组对。这些是形式为$\langle s, t \rangle$的对，其中$t = f s$。这里$f s$是函数$f$作用于参数$s$的结果。你可能更熟悉函数应用的符号$f(s)$，但在这里我将遵循Haskell的惯例，省略括号（以及多变量函数的逗号）。
+
+在编程中，我们习惯于函数由一系列指令定义。我们提供一个参数$s$并应用指令以最终产生结果$t$。我们常常担心计算结果可能需要多长时间，或者算法是否终止。在数学中，我们假设对于任何给定的参数$s \in S$，结果$t \in T$是立即可用的，并且是唯一的。在编程中，我们称这样的函数为纯函数和全函数。
+
+\subsection{约定}
+
+我试图在整本书中保持符号的一致性。它大致基于nLab中流行的风格。
+
+特别是，我决定使用小写字母如$a$或$b$表示范畴中的对象，使用大写字母如$S$表示集合（尽管集合是集合和函数范畴中的对象）。通用范畴的名称如$\cat C$或$\cat D$，而特定范畴的名称如$\Set$或$\Cat{Cat}$。
+
+编程示例用Haskell编写。虽然这不是一本Haskell手册，但语言结构的引入是渐进的，足以帮助读者理解代码。Haskell语法通常基于数学符号，这是一个额外的优势。程序片段以以下格式编写：
+\begin{haskell}
+apply :: (a -> b, a) -> b
+apply (f, x) = f x
+\end{haskell}
+
+本书的Haskell代码，包括编程练习的解决方案，可在\href{https://github.com/BartoszMilewski/DaoFP/tree/master/Haskell}{GitHub}上找到。
+
+\mainmatter
+
+\subfile{1-CleanSlate}
+\subfile{2-Composition}
+\subfile{3-Isomorphism}
+\subfile{4-SumTypes}
+\subfile{5-ProductTypes}
+\subfile{6-FunctionTypes}
+\subfile{7-Recursion}
+\subfile{8-Functors}
+\subfile{9-NaturalTransformations}
+\subfile{10-Adjunctions}
+\subfile{11-Algebras}
+\subfile{12-Coalgebras}
+\subfile{13-Effects}
+\subfile{14-Applicatives}
+\subfile{15-Monads}
+\subfile{16-MonadsAdjunctions}
+\subfile{17-Comonads}
+\subfile{18-Ends}
+\subfile{19-Tambara}
+\subfile{20-Kan}
+\subfile{21-Enrichment}
+\subfile{22-DependentTypes}
+
+\printindex
+
+\end{document}

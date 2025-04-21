@@ -1,0 +1,476 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{4}
+
+\chapter{积类型}
+
+我们可以使用和类型(sum types)来枚举给定类型的可能值，但这种编码方式可能比较浪费。我们仅仅为了编码0到9的数字，就需要十个构造函数。
+\begin{haskell}
+data Digit = Zero | One | Two | Three | ... | Nine
+\end{haskell}
+但是，如果我们将两个数字组合成一个数据结构，即一个两位的十进制数，我们就能够编码一百个数字。或者，正如老子所说，只需四个数字，你就能编码一万个数字。
+
+以这种方式组合两种类型的数据类型称为积(product)，或\index{cartesian product}\emph{笛卡尔}积。其定义性质是消去规则：从$a \times b$出发有两个箭头；一个称为``$\text{fst}$''的箭头指向$a$，另一个称为``$\text{snd}$''的箭头指向$b$。它们被称为(笛卡尔)\index{cartesian projections}\emph{投影}。它们让我们可以从积$a \times b$中提取$a$和$b$。
+
+\[
+ \begin{tikzcd}
+& a \times b
+ \arrow[dl,  "\text{fst}"]
+ \arrow[dr,   "\text{snd}"']
+\\
+a && b
+ \end{tikzcd}
+\]
+
+假设有人给了你一个积的元素，即从终对象$1$到$a \times b$的箭头$h$。你可以很容易地通过组合提取出一对元素：$a$的元素由
+\[x = \text{fst} \circ h \]
+给出，$b$的元素由
+\[y = \text{snd} \circ h \]
+给出。
+
+\[
+ \begin{tikzcd}
+ & 1
+\arrow[d, dashed, "h"]
+ \arrow[ddl, bend right, "x"']
+ \arrow[ddr, bend left, "y"]
+\\
+&a \times b
+ \arrow[dl,  "\text{fst}"]
+ \arrow[dr,   "\text{snd}"']
+\\
+a && b
+ \end{tikzcd}
+\]
+
+事实上，给定从任意对象$c$到$a \times b$的箭头，我们可以通过组合定义一对箭头$f \colon c \to a$和$g \colon c \to b$
+
+\[
+ \begin{tikzcd}
+ & c
+\arrow[d, dashed, "h"]
+ \arrow[ddl, bend right, "f"']
+ \arrow[ddr, bend left, "g"]
+\\
+&a \times b
+ \arrow[dl,  "\text{fst}"]
+  \arrow[dr,   "\text{snd}"']
+\\
+a && b
+ \end{tikzcd}
+\]
+
+正如我们之前对和类型所做的那样，我们可以将这个想法反过来，用这个图来\emph{定义}积类型：我们施加一个条件，即一对函数$f$和$g$与从$c$到$a \times b$的\index{mapping in}\emph{映射入}一一对应。这是积的\emph{引入}规则。
+
+特别是，从终对象的映射在Haskell中用于定义积类型。给定两个元素，\hask{a :: A}和\hask{b :: B}，我们构造积
+
+\begin{haskell}
+(a, b) :: (A, B)
+\end{haskell}
+积的内置语法就是这样：一对括号和中间的一个逗号。它既可以用于定义两种类型的积\hask{(A, B)}，也可以用于定义数据构造函数\hask{(a, b)}，它接受两个元素并将它们配对在一起。
+
+我们永远不应忘记编程的目的：将复杂问题分解为一系列更简单的问题。我们在积的定义中再次看到了这一点。每当我们必须构造一个\emph{映射入}积时，我们将其分解为构造一对函数的两个较小任务，每个函数映射到积的一个组件中。这就像说，要实现一个返回一对值的函数，只需实现两个函数，每个函数返回该对中的一个元素。
+
+\subsection{逻辑}
+
+在逻辑中，积类型对应于逻辑合取。为了证明$A \times B$（$A$与$B$），你需要提供\emph{两者}$A$和$B$的证明。这些是目标为$A$和$B$的箭头。消去规则说，如果你有$A \times B$的证明，那么你自动得到$A$的证明（通过$\text{fst}$）和$B$的证明（通过$\text{snd}$）。
+
+\subsection{元组和记录}
+
+正如老子所说，一万个对象的积只是一个有一万个投影的对象。
+
+我们可以在Haskell中使用元组符号形成任意积。例如，三种类型的积写为\hask{(A, B, C)}。这种类型的项可以从三个元素构造：\hask{(a, b, c)}。
+
+在数学家称之为“符号滥用”的情况下，零种类型的积写为\hask{()}，一个空元组，它恰好与终对象或单位类型相同。这是因为积的行为非常类似于数字的乘法，终对象扮演着1的角色。
+
+在Haskell中，我们使用模式匹配语法，而不是为所有元组定义单独的投影。例如，要从三元组中提取第三个组件，我们会写
+
+\begin{haskell}
+thrd :: (a, b, c) -> c
+thrd (_, _, c) = c
+\end{haskell}
+我们使用通配符来忽略我们想要忽略的组件。
+
+老子说：“名者，万物之始也。”在编程中，如果不给特定元组的组件命名，就很难跟踪它们的含义。记录语法允许我们为投影命名。这是用记录风格编写的积的定义：
+\begin{haskell}
+data Product a b = Pair { fst :: a, snd :: b }
+\end{haskell}
+\hask{Pair}是数据构造函数，\hask{fst}和\hask{snd}是投影。
+
+这是它如何用于声明和初始化特定对的示例：
+\begin{haskell}
+ic :: Product Int Char
+ic = Pair 10 'A'
+\end{haskell}
+
+\section{笛卡尔范畴}
+
+在Haskell中，我们可以定义任意两种类型的积。一个所有积都存在且终对象存在的范畴称为\emph{笛卡尔}范畴。
+
+\subsection{元组算术}
+
+积满足的恒等式可以使用映射入性质推导出来。例如，要证明$a \times b \cong b \times a$，考虑以下两个图：
+
+\[
+ \begin{tikzcd}
+ &x
+ \arrow[d, dashed, "h"]
+ \arrow[ddl, bend right, "f"']
+ \arrow[ddr, bend left, "g"]
+ \\
+ & a \times b
+  \arrow[dl,  "\text{fst}"]
+ \arrow[dr,   "\text{snd}"']
+ \\
+a && b
+ \end{tikzcd}
+ \qquad
+ \begin{tikzcd}
+ &x
+ \arrow[d, dashed, "h'"]
+ \arrow[ddl, bend right, "g"']
+ \arrow[ddr, bend left, "f"]
+ \\
+ & b \times a
+  \arrow[dl,  "\text{fst}"]
+ \arrow[dr,   "\text{snd}"']
+\\
+b && a
+  \end{tikzcd}
+\]
+
+它们表明，对于任何对象$x$，到$a \times b$的箭头与到$b \times a$的箭头一一对应。这是因为这些箭头中的每一个都由相同的对$f$和$g$决定。
+
+你可以检查自然性条件是否满足，因为当你使用$k \colon x' \to x$改变视角时，所有从$x$出发的箭头都通过预组合$(- \circ k)$进行了移位。
+
+在Haskell中，这种同构可以实现为一个函数，它是它自己的逆函数：
+\begin{haskell}
+swap :: (a, b) -> (b, a)
+swap x = (snd x, fst x)
+\end{haskell}
+这是使用模式匹配编写的相同函数：
+\begin{haskell}
+swap (x, y) = (y, x)
+\end{haskell}
+
+重要的是要记住，积的对称性只是“在同构意义下”。这并不意味着交换对的顺序不会改变程序的行为。对称性意味着交换对的信息内容相同，但访问它需要修改。
+
+终对象是积的单位，$1 \times a \cong a$。见证$1 \times a$和$a$之间同构的箭头称为\emph{左单位元}：
+\[ \lambda \colon 1 \times a \to a \]
+它可以实现为$\lambda = \text{snd}$。它的逆$\lambda^{-1}$定义为下图中的唯一箭头：
+\[
+ \begin{tikzcd}
+ &a
+ \arrow[d, dashed, "\lambda^{-1}"]
+ \arrow[ddl, bend right, "!"']
+ \arrow[ddr, bend left, "\text{id}"]
+ \\
+ & 1 \times a
+  \arrow[dl,  "\text{fst}"]
+ \arrow[dr,   "\text{snd}"']
+ \\
+1 && a
+ \end{tikzcd}
+ \]
+从$a$到$1$的箭头称为\index{!}$!$（发音为\emph{bang}）。这确实表明
+\[\text{snd} \circ \lambda^{-1} = \text{id} \] 
+我们仍然需要证明$\lambda^{-1}$是$\text{snd}$的左逆。考虑下图：
+\[
+ \begin{tikzcd}
+ &1 \times a
+ \arrow[d, dashed, "h"]
+ \arrow[ddl, bend right, "!"']
+ \arrow[ddr, bend left, "\text{snd}"]
+ \\
+ & 1 \times a
+  \arrow[dl,  "\text{fst}"]
+ \arrow[dr,   "\text{snd}"']
+ \\
+1 && a
+ \end{tikzcd}
+ \]
+ 对于$h = id$，它显然交换。对于$h = \lambda^{-1}  \circ  \text{snd}$，它也交换，因为我们有：
+ \[  \text{snd} \circ \lambda^{-1}  \circ  \text{snd} = \text{snd} \]
+ 由于$h$应该是唯一的，我们得出结论：
+\[ \lambda^{-1}  \circ  \text{snd} = id \]
+这种使用普遍构造的推理是相当标准的。
+
+以下是一些用Haskell编写的其他同构（没有逆的证明）。这是结合律：
+\begin{haskell}
+assoc :: ((a, b), c) -> (a, (b, c))
+assoc ((a, b), c) = (a, (b, c))
+\end{haskell}
+这是右单位元
+\begin{haskell}
+runit :: (a, ()) -> a
+runit (a, _) = a
+\end{haskell}
+
+这两个函数对应于\index{associator}\emph{结合子}
+\[ \alpha \colon (a \times b) \times c \to a \times (b \times c) \]
+和\index{unitor}\emph{右单位元}：
+\[ \rho \colon a \times 1 \to a \]
+
+\begin{exercise}
+证明左单位元证明中的双射是自然的。提示，使用箭头$g \colon a \to b$改变焦点。
+\end{exercise}
+
+\begin{exercise}
+构造一个箭头
+\[ h \colon b + a \times b \to (1 + a) \times b \]
+这个箭头是唯一的吗？
+
+提示：它是一个映射入积，所以它由一对箭头给出。这些箭头又映射出和，所以每个箭头由一对箭头给出。
+
+提示：映射$b \to 1 + a$由$(\text{Left} \, \circ \, !)$给出
+\end{exercise}
+
+\begin{exercise}
+重做上一个练习，这次将$h$视为\emph{映射出}和。
+\end{exercise}
+
+\begin{exercise}
+实现一个Haskell函数\hask{maybeAB :: Either b (a, b) -> (Maybe a, b)}。这个函数是否由其类型签名唯一定义，还是有一些自由度？
+\end{exercise}
+
+\subsection{函子性}
+
+假设我们有将$a$和$b$映射到某个$a'$和$b'$的箭头：
+\begin{align*}
+f &\colon a \to a' \\
+g &\colon b \to b'
+\end{align*}
+这些箭头与投影$\text{fst}$和$\text{snd}$的组合可以用于定义积之间的映射$h$：
+
+\[
+ \begin{tikzcd}
+ & a \times b
+\arrow[d, dashed, "h"]
+ \arrow[dl,  "\text{fst}"']
+ \arrow[dr,   "\text{snd}"]
+\\
+a
+\arrow[d, "f"']
+&a' \times b'
+ \arrow[dl,  "\text{fst}"]
+  \arrow[dr,   "\text{snd}"']
+& b
+\arrow[d, "g"]
+\\
+a' && b'
+ \end{tikzcd}
+\]
+这个图的简写符号是：
+\[ a \times b \xrightarrow{f \times g} a' \times b' \]
+
+积的这种性质称为\emph{函子性}。你可以想象它允许你转换积\emph{内部}的两个对象以获得新的积。我们也说函子性让我们\index{lifting}\emph{提升}一对箭头以操作积。
+
+\section{对偶性}
+
+当一个孩子看到箭头时，他知道哪一端指向源(source)，哪一端指向目标(target)
+\[a \to b \]
+但这可能只是一种先入为主的观念。如果我们称$b$为源(source)而$a$为目标(target)，宇宙会变得非常不同吗？
+
+我们仍然可以将这个箭头与另一个箭头组合
+\[b \to c\]
+其"目标"$b$与$a \to b$的"源"相同，结果仍然是一个箭头
+\[a \to c\]
+只是现在我们会说它从$c$指向$a$。
+
+在这个对偶的宇宙中，我们称为"初始"(initial)的对象将被称为"终结"(terminal)，因为它是来自所有对象的唯一箭头的"目标"。相反，终结对象将被称为初始。
+
+现在考虑我们用来定义和对象(sum object)的图表：
+\[
+ \begin{tikzcd}
+ a
+ \arrow[dr,  bend left, "\text{Left}"']
+ \arrow[ddr, bend right, "f"']
+ && b
+ \arrow[dl, bend right, "\text{Right}"]
+ \arrow[ddl, bend left, "g"]
+ \\
+&a + b
+\arrow[d, dashed, "h"]
+\\
+& c
+ \end{tikzcd}
+\]
+在新的解释中，箭头$h$将从任意对象$c$指向我们称为$a + b$的对象。这个箭头由一对"源"为$c$的箭头$(f, g)$唯一确定。如果我们将$\text{Left}$重命名为$\text{fst}$，将$\text{Right}$重命名为$\text{snd}$，我们将得到积对象(product)的定义图表。
+
+积对象是箭头反向的和对象。
+
+相反，和对象是箭头反向的积对象。
+
+\medskip
+
+范畴论中的每个构造都有其对偶。
+
+\medskip
+
+如果箭头的方向只是一个解释问题，那么在编程中，和类型(sum types)与积类型(product types)为何如此不同？这种差异可以追溯到我们一开始做出的一个假设：初始对象没有传入的箭头（除了恒等箭头）。这与终结对象有许多传出箭头形成对比，我们使用这些箭头来定义（全局）元素。事实上，我们假设每个感兴趣的对象都有元素，而没有元素的对象与\hask{Void}同构。
+
+当我们讨论函数类型时，我们将看到一个更深刻的差异。
+
+\section{幺半范畴}
+
+我们已经看到积满足以下简单规则：
+\begin{align*}
+1 \times a &\cong a
+\\
+a \times b &\cong b \times a
+\\
+(a \times b) \times c &\cong a \times (b \times c)
+\end{align*}
+并且是函子性的。
+
+定义了具有这些性质的运算的范畴称为\emph{对称幺半范畴}\footnote{严格来说，两个对象的积是定义在同构意义下的，而幺半范畴中的积必须精确定义。但我们可以通过选择一个积来得到一个幺半范畴}。我们之前在讨论和与初始对象时已经见过类似的结构。
+
+一个范畴可以同时具有多个幺半结构。当不想为幺半结构命名时，可以用张量符号代替加号或积符号，用字母$I$代替中性元素。于是，对称幺半范畴的规则可以写成：
+\begin{align*}
+I \otimes a &\cong a
+\\
+a \otimes b &\cong b \otimes a
+\\
+(a \otimes b) \otimes c &\cong a \otimes (b \otimes c)
+\end{align*}
+
+这些同构通常写成可逆箭头的族，称为\index{结合子}结合子和\index{单位子}单位子。如果幺半范畴不是对称的，则存在独立的左单位子和右单位子。
+\begin{align*}
+\alpha &\colon (a \otimes b) \otimes c \to a \otimes (b \otimes c)
+\\
+ \lambda &\colon I \otimes a \to a
+ \\
+ \rho &\colon a \otimes I \to a
+\end{align*}
+对称性由以下箭头体现：
+\[ \gamma \colon a \otimes b \to b \otimes a \]
+函子性允许我们将一对箭头\emph{提升}：
+\begin{align*} 
+f &\colon a \to a' \\
+g &\colon b \to b'
+\end{align*}
+以作用于张量积上：
+\[ a \otimes b \xrightarrow{f \otimes g} a' \otimes b' \]
+
+如果我们将态射视为动作，它们的张量积对应于并行执行两个动作。这与态射的串行组合形成对比，后者暗示了它们的时间顺序。
+
+你可以将张量积视为积与和的最低公分母。它仍然有一个引入规则，需要两个对象$a$和$b$；但它没有消去规则。一旦创建，张量积就“忘记”了它是如何创建的。与笛卡尔积不同，它没有投影。
+
+一些有趣的张量积例子甚至不是对称的。
+
+\subsection{幺半群}
+
+幺半群是非常简单的结构，配备了一个二元运算和一个单位元。带有加法和零的自然数形成一个幺半群。带有乘法和一的自然数也是如此。
+
+直观上，幺半群允许你将两个事物组合成另一个事物。还有一个特殊的事物，与任何其他事物组合都会返回相同的事物。这就是单位元。并且组合必须是结合的。
+
+不假设的是组合是对称的，或者存在逆元。
+
+定义幺半群的规则让人想起范畴的规则。不同之处在于，在幺半群中，任何两个事物都是可组合的，而在范畴中通常不是这样：只有当两个箭头的目标是一个箭头的源时，才能组合它们。除非范畴只包含一个对象，在这种情况下所有箭头都是可组合的。
+
+只有一个对象的范畴称为幺半群。组合运算是箭头的组合，单位元是恒等箭头。
+
+这是一个完全有效的定义。然而，在实践中，我们通常对嵌入在更大范畴中的幺半群感兴趣。特别是在编程中，我们希望能够在类型和函数的范畴内定义幺半群。
+
+然而，在范畴中，我们更喜欢批量定义运算，而不是查看单个元素。因此，我们从一个对象$m$开始。二元运算是两个参数的函数。由于积的元素是成对的元素，我们可以将二元运算描述为从积$m \times m$到$m$的箭头：
+\[ \mu \colon m \times m \to m \]
+单位元素可以定义为从终对象$1$出发的箭头：
+\[ \eta \colon 1 \to m \]
+
+我们可以通过定义一个\index{类型类}类型类来直接将这个描述翻译成Haskell，该类配备了两个方法，传统上称为\hask{mappend}和\hask{mempty}：
+\begin{haskell}
+class Monoid m where
+  mappend :: (m, m) -> m
+  mempty  :: () -> m
+\end{haskell}
+
+两个箭头$\mu$和$\eta$必须满足幺半群定律，但同样，我们必须批量表述它们，而不依赖于任何元素。
+
+为了表述左单位律，我们首先创建积$1 \times m$。然后使用$\eta$“在$m$中选择单位元”，或者用箭头的话说，将$1$转换为$m$。由于我们在积$1 \times m$上操作，我们必须提升对$\langle \eta, id_m \rangle$，这确保我们“不触碰”$m$。最后，我们使用$\mu$执行“乘法”。
+
+我们希望结果与$m$的原始元素相同，但不提及元素。因此，我们只需使用左单位子$\lambda$从$1 \times m$到$m$，而不“搅动事物”。
+\[
+ \begin{tikzcd}
+ 1 \times m
+ \arrow[rr, "\eta \times id_m"]
+ \arrow[rrd, "\lambda"']
+& & m \times m
+ \arrow[d, "\mu"]
+ \\
+ && m
+  \end{tikzcd}
+\]
+这是右单位的类似定律：
+\[
+ \begin{tikzcd}
+ m \times m
+ \arrow[d, "\mu"]
+ && m \times 1
+ \arrow[ll, "id_m \times \eta"']
+ \arrow[lld, "\rho"]
+ \\
+ m
+ \end{tikzcd}
+\]
+为了表述结合律，我们必须从三重积开始并批量操作。这里，$\alpha$是结合子，它重新排列积而不“搅动事物”。
+\[
+ \begin{tikzcd}
+ (m \times m) \times m 
+ \arrow[rr, "\alpha"]
+ \arrow[d, "\mu \times id"]
+ &&
+ m \times (m \times m)
+ \arrow[d, "id \times \mu"]
+ \\
+ m \times m 
+ \arrow[dr, "\mu"]
+& & m \times m
+ \arrow[dl, "\mu"']
+ \\
+&  m
+ \end{tikzcd}
+\]
+
+注意，我们不必对与对象$m$和$1$一起使用的范畴积做很多假设。特别是我们从未使用过投影。这表明上述定义在任意幺半范畴中的张量积上同样适用。它甚至不必是对称的。我们只需假设：存在一个单位对象，积是函子性的，并且它满足单位和结合律的同构。
+
+因此，如果我们将$\times$替换为$\otimes$，将$1$替换为$I$，我们就得到了在任意幺半范畴中幺半群的定义。
+
+\index{幺半群}\emph{幺半群}在幺半范畴中是一个对象$m$，配备两个态射：
+\[ \mu \colon m \otimes m \to m \]
+\[ \eta \colon I \to m \]
+满足单位和结合律：
+\[
+ \begin{tikzcd}
+ 1 \otimes m
+ \arrow[rr, "\eta \otimes id_m"]
+ \arrow[rrd, "\lambda"']
+& & m \otimes m
+ \arrow[d, "\mu"']
+&& m \otimes 1
+ \arrow[ll, "id_m \otimes \eta"']
+ \arrow[lld, "\rho"]
+ \\
+ && m
+  \end{tikzcd}
+\]
+
+\[
+ \begin{tikzcd}
+ (m \otimes m) \otimes m 
+ \arrow[rr, "\alpha"]
+ \arrow[d, "\mu \otimes id_m"]
+ &&
+ m \otimes (m \otimes m)
+ \arrow[d, "id_m \otimes \mu"]
+ \\
+ m \otimes m 
+ \arrow[dr, "\mu"]
+& & m \otimes m
+ \arrow[dl, "\mu"']
+ \\
+&  m
+ \end{tikzcd}
+\]
+我们使用了$\otimes$的函子性来提升箭头对，如$\eta \otimes id_m$，$\mu \otimes id_m$等。
+
+\end{document}

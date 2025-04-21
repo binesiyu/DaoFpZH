@@ -1,0 +1,16 @@
+
+*.aux
+*.log
+*.pdf
+!DaoFP.pdf
+*.gz
+*.pygtex
+*.pygstyle
+*.toc
+.DS_Store
+DaoFP.ilg
+*.ind
+*.idx
+*.fls
+*.out
+*.pyg

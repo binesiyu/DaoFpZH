@@ -1,0 +1,579 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{5}
+
+\chapter{函数类型}
+
+在函数式编程中，还有另一种组合方式处于核心地位。它发生在你将一个函数作为参数传递给另一个函数时。外部函数可以将这个参数作为其自身机制的可插拔部分来使用。例如，它允许你实现一个通用的排序算法，该算法接受任意的比较函数。
+
+如果我们将函数建模为对象之间的箭头，那么将函数作为参数意味着什么？
+
+我们需要一种将函数对象化的方法，以便定义以“箭头对象”为源或目标的箭头。接受函数作为参数或返回函数的函数被称为\emph{高阶}函数。高阶函数是函数式编程的主力军。
+
+\subsection{消去规则}
+
+函数的一个定义特性是它可以应用于一个参数以产生结果。我们已经用组合的方式定义了函数应用：
+
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[d, "x"']
+ \arrow[rd, "y"]
+ \\
+ a
+ \arrow[r, "f"']
+& b
+ \end{tikzcd}
+\]
+这里$f$被表示为从$a$到$b$的箭头，但我们希望能够用箭头对象的元素替换$f$，或者如数学家所称的，指数对象$b^a$；或者如我们在编程中所称的，函数类型\hask{a->b}。
+
+给定$b^a$的一个元素和$a$的一个元素，函数应用应该产生$b$的一个元素。换句话说，给定一对元素：
+\begin{align*}
+f &\colon 1 \to b^a \\
+x &\colon 1 \to a
+\end{align*}
+它应该产生一个元素：
+\[y \colon 1 \to b \]
+
+请记住，这里$f$表示$b^a$的一个元素。之前，它是从$a$到$b$的箭头。
+
+我们知道，一对元素$(f, x)$等价于积$b^a \times a$的一个元素。因此，我们可以将函数应用定义为单个箭头：
+\[\varepsilon_{a b} \colon b^a \times a \to b\]
+这样，应用的结果$y$由以下交换图定义：
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[d, "{(f, x)}"']
+ \arrow[rd, "y"]
+ \\
+ b^a \times a
+ \arrow[r, "\varepsilon_{a b}"']
+& b
+ \end{tikzcd}
+\]
+函数应用是函数类型的\emph{消去规则}。
+
+当某人给你一个函数对象的元素时，你唯一能做的就是使用$\varepsilon$将其应用于参数类型的元素。
+
+\subsection{引入规则}
+为了完成函数对象的定义，我们还需要引入规则。
+
+首先，假设有一种方法可以从某个其他对象$c$构造函数对象$b^a$。这意味着存在一个箭头
+\[h \colon c \to b^a\]
+我们知道可以使用$\varepsilon_{a b}$来消去$h$的结果，但我们必须首先将其乘以$a$。因此，让我们首先将$c$乘以$a$，然后使用函子性将其映射到$b^a \times a$。
+
+函子性允许我们将一对箭头应用于积以得到另一个积。这里，这对箭头是$(h, id_a)$（我们希望将$c$变为$b^a$，但我们不感兴趣修改$a$）
+\[ c \times a \xrightarrow{h \times id_a} b^a \times a \]
+我们现在可以跟随这个箭头进行函数应用，以到达$b$
+\[ c \times a \xrightarrow{h \times id_a} b^a \times a \xrightarrow{\varepsilon_{a b}} b\]
+这个复合箭头定义了一个我们称为$f$的映射：
+\[f \colon c \times a \to b\]
+这是对应的图
+
+\[
+ \begin{tikzcd}
+ c \times a
+ \arrow[d, dashed, "h \times id_a"']
+ \arrow[rd, "f"]
+ \\
+ b^a \times a
+ \arrow[r, "\varepsilon"']
+& b
+ \end{tikzcd}
+\]
+这个交换图告诉我们，给定一个$h$，我们可以构造一个$f$；但我们也可以要求相反的情况：每个映射$f \colon c \times a \to b$，应该唯一地定义一个映射到指数的$h \colon c \to b^a$。
+
+我们可以使用这个性质，即两组箭头之间的一一对应关系，来定义指数对象。这是函数对象$b^a$的\emph{引入规则}。
+
+我们已经看到，积是使用其映射入性质定义的。另一方面，函数应用被定义为积的\emph{映射出}。
+
+\subsection{柯里化}
+
+有几种方式可以看待这个定义。一种方式是将其视为柯里化的一个例子。
+
+到目前为止，我们只考虑了单参数函数。这并不是一个真正的限制，因为我们总是可以将一个双参数函数实现为从积出发的（单参数）函数。函数对象定义中的$f$就是这样一个函数：
+\begin{haskell}
+f :: (c, a) -> b
+\end{haskell}
+另一方面，\hask{h}是一个返回函数的函数：
+\begin{haskell}
+h :: c -> (a -> b)
+\end{haskell}
+柯里化是这两组箭头之间的同构。
+
+这种同构可以在Haskell中通过一对（高阶）函数来表示。由于在Haskell中，柯里化适用于任何类型，这些函数使用类型变量编写——它们是\emph{多态}的：
+\begin{haskell}
+curry   :: ((c, a) -> b)   -> (c -> (a -> b))
+\end{haskell}
+
+\begin{haskell}
+uncurry :: (c -> (a -> b)) -> ((c, a) -> b)
+\end{haskell}
+换句话说，函数对象定义中的$h$可以写成
+\[ h = curry\, f \]
+
+当然，这样写时，\hask{curry}和\hask{uncurry}的类型对应于函数对象而不是箭头。这种区别通常被忽略，因为指数的\emph{元素}与定义它们的\emph{箭头}之间存在一一对应关系。当我们用终端对象替换任意对象$c$时，这一点很容易看到。我们得到：
+
+\[
+ \begin{tikzcd}
+ 1 \times a
+ \arrow[d, dashed, "h \times id_a"']
+ \arrow[rd, "f"]
+ \\
+ b^a \times a
+ \arrow[r, "\varepsilon_{a b}"']
+& b
+ \end{tikzcd}
+\]
+在这种情况下，$h$是对象$b^a$的一个元素，$f$是从$1 \times a$到$b$的箭头。但我们知道$1 \times a$与$a$同构，因此，实际上，$f$是从$a$到$b$的箭头。
+
+因此，从现在开始，我们将把箭头\hask{->}称为箭头$\to$，而不做太多区分。这种现象的正确说法是，该范畴是自丰富的。
+
+我们可以将$\varepsilon_{a b}$写为Haskell函数\hask{apply}：
+\begin{haskell}
+apply :: (a -> b, a) -> b
+apply (f, x) = f x
+\end{haskell}
+但这只是一个语法技巧：函数应用是内置在语言中的：\hask{f x}意味着\hask{f}应用于\hask{x}。其他编程语言要求函数的参数用括号括起来，但在Haskell中则不然。
+
+尽管将函数应用定义为一个单独的函数可能看起来是多余的，但Haskell库确实为此提供了一个中缀运算符\hask{$}：
+\begin{haskell}
+($) :: (a -> b) -> a -> b
+f $ x = f x
+\end{haskell}
+不过，技巧在于，常规的函数应用是左结合的，例如，\hask{f x y}与\hask{(f x) y}相同；但美元符号是右结合的，因此
+\begin{haskell}
+f  $ g x
+\end{haskell}
+与\hask{f (g x)}相同。在第一个例子中，\hask{f}必须是一个（至少）双参数的函数；在第二个例子中，它可以是一个单参数的函数。
+
+在Haskell中，柯里化无处不在。双参数函数几乎总是写成一个返回函数的函数。由于函数箭头\hask{->}是右结合的，因此不需要为这种类型加括号。例如，对构造函数的签名是：
+\begin{haskell}
+pair :: a -> b -> (a, b)
+\end{haskell}
+你可以将其视为一个双参数函数返回一个对，或者一个单参数函数返回一个单参数函数，\hask{b->(a, b)}。这样，部分应用这样的函数是可以的，结果是另一个函数。例如，我们可以定义：
+\begin{haskell}
+pairWithTen :: a -> (Int, a)
+pairWithTen = pair 10 -- pair的部分应用
+\end{haskell}
+
+
+
+\subsection{与λ演算的关系}
+
+看待函数对象定义的另一种方式是将$c$解释为$f$定义的环境的类型。在这种情况下，通常将环境称为$\Gamma$。箭头被解释为使用$\Gamma$中定义的变量的表达式。
+
+考虑一个简单的例子，表达式：
+\[a x^2 + b x + c\]
+你可以将其视为由实数三元组$(a, b, c)$和变量$x$参数化，假设$x$是一个复数。三元组是积$\mathbb{R} \times \mathbb{R} \times \mathbb{R}$的一个元素。这个积是我们表达式的环境$\Gamma$。
+
+变量$x$是$\mathbb{C}$的一个元素。表达式是从积$\Gamma \times \mathbb{C}$到结果类型（这里也是$\mathbb{C}$）的箭头
+\[f \colon \Gamma \times \mathbb{C} \to \mathbb{C} \]
+这是一个从积出发的映射，因此我们可以用它来构造函数对象$\mathbb{C}^{\mathbb{C}}$并定义映射$h \colon \Gamma \to \mathbb{C}^{\mathbb{C}}$
+\[
+ \begin{tikzcd}
+ \Gamma \times \mathbb{C}
+ \arrow[d, dashed, "h \times id_{\mathbb{C}}"']
+ \arrow[rd, "f"]
+ \\
+ \mathbb{C}^{\mathbb{C}} \times \mathbb{C}
+ \arrow[r, "\varepsilon"']
+& \mathbb{C}
+ \end{tikzcd}
+\]
+这个新的映射$h$可以被视为函数对象的构造函数。生成的函数对象表示所有从$\mathbb{C}$到$\mathbb{C}$的函数，这些函数可以访问环境$\Gamma$；即，三元组参数$(a, b, c)$。
+
+对应于我们原始的表达式$a x^2 + b x + c$，在$\mathbb{C}^{\mathbb{C}}$中有一个特定的函数，我们将其写为：
+\[  \lambda x . \,a x^2 + b x + c \]
+或者，在Haskell中，用\index{反斜杠}反斜杠替换$\lambda$，
+\begin{haskell}
+\x -> a * x^2 + b * x + c
+\end{haskell}
+
+箭头$h \colon \Gamma \to \mathbb{C}^{\mathbb{C}}$由箭头$f$唯一确定。这个映射产生一个我们称为$\lambda x . f$的函数。
+
+一般来说，函数对象的定义图变为：
+\[
+ \begin{tikzcd}
+ \Gamma \times a
+ \arrow[d, dashed, "{h \times id_a}"']
+ \arrow[rd, "f"]
+ \\
+ b^a \times a
+ \arrow[r, "\varepsilon"']
+& b
+ \end{tikzcd}
+\]
+
+为表达式$f$提供自由参数的环境$\Gamma$是表示参数类型的多个对象的积（在我们的例子中，它是$\mathbb{R} \times \mathbb{R} \times \mathbb{R}$）。
+
+空环境由终端对象$1$表示，即积的单位。在这种情况下，$f$只是一个箭头$a \to b$，而$h$简单地从函数对象$b^a$中选择一个对应于$f$的元素。
+
+重要的是要记住，一般来说，函数对象表示依赖于外部参数的函数。这样的函数被称为\index{闭包}\emph{闭包}。闭包是从其环境中捕获值的函数。
+
+这是我们的例子在Haskell中的翻译。对应于$f$，我们有一个表达式：
+\begin{haskell}
+(a :+ 0) * x * x + (b :+ 0) * x + (c :+ 0)
+\end{haskell}
+如果我们使用\hask{Double}来近似$\mathbb{R}$，我们的环境是积\hask{(Double, Double, Double)}。类型\hask{Complex}由另一个类型参数化——这里我们再次使用\hask{Double}：
+\begin{haskell}
+type C = Complex Double
+\end{haskell}
+从\hask{Double}到\hask{C}的转换是通过将虚部设为零来完成的，如\hask{(a :+ 0)}。
+
+对应的箭头$h$接受环境并生成一个类型为\hask{C -> C}的闭包：
+\begin{haskell}
+h :: (Double, Double, Double) -> (C -> C)
+h (a, b, c) = \x -> (a :+ 0) * x * x + (b :+ 0) * x + (c :+ 0)
+\end{haskell}
+
+\subsection{肯定前件}
+
+在逻辑中，函数对象对应于蕴涵。从终端对象到函数对象的箭头是该蕴涵的证明。函数应用$\varepsilon$对应于逻辑学家所称的\emph{肯定前件}：如果你有蕴涵$A \Rightarrow B$的证明和$A$的证明，那么这就构成了$B$的证明。
+
+\section{和与积的再探}
+
+当函数获得与其他类型元素相同的地位时，我们就有工具直接将图转换为代码。
+
+\subsection{和类型}
+
+让我们从和的定义开始。
+\[
+ \begin{tikzcd}
+ a
+ \arrow[dr,  bend left, "\text{Left}"']
+ \arrow[ddr, bend right, "f"']
+ && b
+ \arrow[dl, bend right, "\text{Right}"]
+ \arrow[ddl, bend left, "g"]
+ \\
+&a + b
+\arrow[d, dashed, "h"]
+\\
+& c
+ \end{tikzcd}
+\]
+我们说，箭头对$(f, g)$唯一地确定了从和出发的映射$h$。我们可以使用高阶函数简洁地写出它：
+\begin{haskell}
+h = mapOut (f, g)
+\end{haskell}
+其中：
+\begin{haskell}
+mapOut :: (a -> c, b -> c) -> (Either a b -> c)
+mapOut (f, g) = \aorb -> case aorb of
+                         Left  a -> f a
+                         Right b -> g b
+\end{haskell}
+这个函数接受一对函数作为参数，并返回一个函数。
+
+首先，我们对对\hask{(f, g)}进行模式匹配以提取\hask{f}和\hask{g}。然后我们使用lambda构造一个新函数。这个lambda接受一个类型为\hask{Either a b}的参数，我们称之为\hask{aorb}，并对其进行案例分析。如果它是用\hask{Left}构造的，我们将\hask{f}应用于其内容，否则我们将\hask{g}应用于其内容。
+
+请注意，我们返回的函数是一个闭包。它从其环境中捕获\hask{f}和\hask{g}。
+
+我们实现的函数紧密遵循图，但它不是用通常的Haskell风格编写的。Haskell程序员更喜欢对多参数函数进行柯里化。此外，如果可能，他们更喜欢消除lambda。
+
+这是Haskell标准库中相同函数的版本，它被称为（小写）\hask{either}：
+\begin{haskell}
+either :: (a -> c) -> (b -> c) -> Either a b -> c
+either f _ (Left x)     =  f x
+either _ g (Right y)    =  g y
+\end{haskell}
+
+双射的另一个方向，从$h$到对$(f, g)$，也遵循图的箭头。
+\begin{haskell}
+unEither :: (Either a b -> c) -> (a -> c, b -> c)
+unEither h = (h . Left, h . Right)
+\end{haskell}
+
+
+\subsection{积类型}
+
+积类型由其映射入性质对偶定义。
+\[
+ \begin{tikzcd}
+ & c
+\arrow[d, dashed, "h"]
+ \arrow[ddl, bend right, "f"']
+ \arrow[ddr, bend left, "g"]
+\\
+&a \times b
+ \arrow[dl,  "\text{fst}"]
+  \arrow[dr,   "\text{snd}"']
+\\
+a && b
+ \end{tikzcd}
+\]
+这是该图的直接Haskell解读
+\begin{haskell}
+mapIn :: (c -> a, c -> b) -> (c -> (a, b))
+mapIn (f, g) = \c -> (f c, g c)
+\end{haskell}
+这是用Haskell风格编写的风格化版本，作为中缀运算符\hask{&&&}
+\begin{haskell}
+(&&&) :: (c -> a) -> (c -> b) -> (c -> (a, b))
+(f &&& g) c = (f c, g c)
+\end{haskell}
+双射的另一个方向由以下给出：
+\begin{haskell}
+fork :: (c -> (a, b)) -> (c -> a, c -> b)
+fork h = (fst . h, snd . h)
+\end{haskell}
+它也紧密遵循图的解读。
+
+\subsection{函子性的再探}
+
+和与积都是函子性的，这意味着我们可以将函数应用于它们的内容。我们准备将这些图转换为代码。
+
+这是和类型的函子性：
+
+\[
+ \begin{tikzcd}
+ a
+ \arrow[d, "f"]
+ \arrow[dr,  bend left, "\text{Left}"']
+  && b
+ \arrow[d, "g"]
+ \arrow[dl, bend right, "\text{Right}"]
+ \\
+ a'
+ \arrow[rd, "\text{Left}"']
+&a + b
+\arrow[d, dashed, "h"]
+& b'
+\arrow[ld, "\text{Right}"]
+\\
+& a' + b'
+ \end{tikzcd}
+\]
+阅读这个图，我们可以立即使用\hask{either}写出$h$：
+\begin{haskell}
+h f g = either (Left . f) (Right . g)
+\end{haskell}
+或者我们可以扩展它并称之为\hask{bimap}：
+\begin{haskell}
+bimap :: (a -> a') -> (b -> b') -> Either a b -> Either a' b'
+bimap f g (Left  a) = Left  (f a)
+bimap f g (Right b) = Right (g b)
+\end{haskell}
+类似地，对于积类型：
+\[
+ \begin{tikzcd}
+ & a \times b
+\arrow[d, dashed, "h"]
+ \arrow[dl,  "\text{fst}"']
+ \arrow[dr,   "\text{snd}"]
+\\
+a
+\arrow[d, "f"']
+&a' \times b'
+ \arrow[dl,  "\text{fst}"]
+  \arrow[dr,   "\text{snd}"']
+& b
+\arrow[d, "g"]
+\\
+a' && b'
+ \end{tikzcd}
+\]
+$h$可以写为：
+\begin{haskell}
+h f g = (f . fst) &&& (g . snd)
+\end{haskell}
+或者可以扩展为
+\begin{haskell}
+bimap :: (a -> a') -> (b -> b') -> (a, b) -> (a', b')
+bimap f g (a, b) = (f a, g b)
+\end{haskell}
+在这两种情况下，我们都将这个高阶函数称为\hask{bimap}，因为在Haskell中，和与积都是一个更一般类\hask{Bifunctor}的实例。
+
+\section{函数类型的函子性}
+
+函数类型，或称指数类型，也具有函子性，但有一个转折。我们关注的是从$b^a$到$b'^{a'}$的映射，其中带撇的对象通过某些箭头（待确定）与不带撇的对象相关联。
+
+指数类型由其映射入性质定义，因此如果我们寻找
+\[k \colon b^a \to b'^{a'} \]
+我们应该绘制以$k$作为映射到$b'^{a'}$的图表。我们通过将$b^a$替换为$c$并将带撇的对象替换为不带撇的对象，从原始定义中得到这个图表：
+
+\[
+ \begin{tikzcd}
+ b^a \times a'
+ \arrow[d, dashed, "k \times id_a"']
+ \arrow[rd, "g"]
+ \\
+ b'^{a'} \times a'
+ \arrow[r, "\varepsilon"']
+& b'
+ \end{tikzcd}
+\]
+问题是：我们能否找到一个箭头$g$来完成这个图表？
+\[g \colon b^a \times a' \to b'\]
+如果我们找到这样的$g$，它将唯一地定义我们的$k$。
+
+思考这个问题的方法是考虑如何实现$g$。它以乘积$b^a \times a'$作为其参数。将其视为一对：一个从$a$到$b$的函数对象元素和一个$a'$的元素。我们唯一能对函数对象做的事情是将其应用于某物。但$b^a$需要一个类型为$a$的参数，而我们手头只有$a'$。除非有人给我们一个箭头$a' \to a$，否则我们无法做任何事情。这个箭头应用于$a'$将生成$b^a$的参数。然而，应用的结果是类型$b$，而$g$应该产生一个$b'$。同样，我们需要一个箭头$b \to b'$来完成我们的任务。
+
+这听起来可能很复杂，但归根结底，我们需要在带撇和不带撇的对象之间有两个箭头。转折在于第一个箭头从$a'$到$a$，这感觉与通常的函子性考虑相反。为了将$b^a$映射到$b'^{a'}$，我们需要一对箭头：
+\begin{align*}
+f &\colon a' \to a \\
+g &\colon b \to b' 
+\end{align*}
+
+这在Haskell中更容易解释。我们的目标是实现一个函数\hask{a' -> b'}，给定一个函数\hask{h :: a -> b}。
+
+这个新函数接受一个类型为\hask{a'}的参数，因此在我们将其传递给\hask{h}之前，我们需要将\hask{a'}转换为\hask{a}。这就是为什么我们需要一个函数\hask{f :: a' -> a}。
+
+由于\hask{h}产生一个\hask{b}，而我们希望返回一个\hask{b'}，我们需要另一个函数\hask{g :: b -> b'}。所有这些都很好地融入一个高阶函数：
+\begin{haskell}
+dimap :: (a' -> a) -> (b -> b') -> (a -> b) -> (a' -> b')
+dimap f g h = g . h . f
+\end{haskell}
+类似于\hask{bimap}是类型类\hask{Bifunctor}的接口，\hask{dimap}是类型类\hask{Profunctor}的成员。
+
+\section{双笛卡尔闭范畴}
+
+在范畴论中，如果一个范畴对任意两个对象都定义了积和指数，并且具有终对象，则该范畴称为\emph{笛卡尔闭范畴}。其核心思想是，hom集并不是该范畴的外来概念：范畴在形成hom集的操作下是“闭”的。
+
+如果该范畴还具有和（余积）和始对象，则称为\emph{双笛卡尔闭范畴}。
+
+这是建模编程语言所需的最小结构。
+
+使用这些操作构造的数据类型称为\emph{代数数据类型}。我们拥有类型的加法、乘法和指数运算（但没有减法或除法）；并且满足我们在高中代数中熟悉的所有定律。这些定律在同构的意义下成立。还有一个我们尚未讨论的代数定律。
+
+\subsection{分配律}
+
+数的乘法对加法具有分配性。在双笛卡尔闭范畴中，我们是否应该期望同样的性质？
+\[b \times a + c \times a \cong (b + c) \times a\]
+
+从左到右的映射很容易构造，因为它同时是一个从和出发的映射和一个到积的映射。我们可以通过逐步将其分解为更简单的映射来构造它。在Haskell中，这意味着实现一个函数
+\begin{haskell}
+dist :: Either (b, a) (c, a) -> (Either b c, a)
+\end{haskell}
+从左侧的和出发的映射由一对箭头给出：
+\begin{align*}
+f &\colon b\times a \to (b + c) \times a \\
+g &\colon c\times a \to (b + c) \times a 
+\end{align*}
+\[
+ \begin{tikzcd}
+ b \times a
+ \arrow[dr,  bend left, "\text{Left}"]
+ \arrow[ddr, bend right, "f"']
+ && c \times a
+ \arrow[dl, bend right, "\text{Right}"']
+ \arrow[ddl, bend left, "g"]
+ \\
+& b \times a + c \times a
+\arrow[d, dashed, "\text{dist}"]
+\\
+& (b + c) \times a
+ \end{tikzcd}
+\]
+
+我们在Haskell中将其写为：
+\begin{haskell}
+dist = either f g
+  where
+    f   :: (b, a) -> (Either b c, a)
+    g   :: (c, a) -> (Either b c, a)
+\end{haskell}
+\index{\hask{where}}\hask{where}子句用于引入子函数的定义。
+
+现在我们需要实现$f$和$g$。它们都是到积的映射，因此每个都等价于一对箭头。例如，第一个由以下箭头对给出：
+\begin{align*}
+f' &\colon b \times a \to (b + c) \\
+f'' &\colon b \times a \to  a
+\end{align*}
+\[
+ \begin{tikzcd}
+ & b \times a
+\arrow[d, dashed, "f"]
+ \arrow[ddl, bend right, "f'"']
+ \arrow[ddr, bend left, "f''"]
+\\
+& (b + c) \times a
+ \arrow[dl,  "\text{fst}"]
+  \arrow[dr,   "\text{snd}"']
+\\
+b + c && a
+ \end{tikzcd}
+\]
+
+在Haskell中：
+\begin{haskell}
+    f = f' &&& f''
+    f'  :: (b, a) -> Either b c
+    f'' :: (b, a) -> a
+\end{haskell}
+第一个箭头可以通过投影第一个分量$b$，然后使用$\text{Left}$来构造和。第二个箭头只是投影$\text{snd}$：
+\begin{align*}
+ f' &= \text{Left} \circ \text{fst} \\
+ f'' &= \text{snd}
+\end{align*}
+类似地，我们将$g$分解为$g'$和$g''$：
+\[
+ \begin{tikzcd}
+ & c \times a
+\arrow[d, dashed, "g"]
+ \arrow[ddl, bend right, "g'"']
+ \arrow[ddr, bend left, "g''"]
+\\
+& b + c \times a
+ \arrow[dl,  "\text{fst}"]
+  \arrow[dr,   "\text{snd}"']
+\\
+(b + c) && a
+ \end{tikzcd}
+\]
+
+将这些组合在一起，我们得到：
+\begin{haskell}
+dist = either f g
+  where
+    f   = f' &&& f''
+    f'  = Left . fst
+    f'' = snd
+    g   = g' &&& g''
+    g'  = Right . fst
+    g'' = snd
+\end{haskell}
+这些是辅助函数的类型签名：
+\begin{haskell}
+    f   :: (b, a) -> (Either b c, a)
+    g   :: (c, a) -> (Either b c, a)
+    f'  :: (b, a) -> Either b c
+    f'' :: (b, a) -> a
+    g'  :: (c, a) -> Either b c
+    g'' :: (c, a) -> a
+\end{haskell}
+它们也可以内联以产生这种简洁的形式：
+\begin{haskell}
+dist = either ((Left . fst) &&& snd) ((Right . fst) &&& snd)
+\end{haskell}
+
+这种编程风格称为\emph{无点}风格，因为它省略了参数（点）。出于可读性考虑，Haskell程序员更喜欢更显式的风格。上述函数通常会实现为：
+\begin{haskell}
+dist (Left  (b, a)) = (Left  b, a)
+dist (Right (c, a)) = (Right c, a)
+\end{haskell}
+
+注意，我们只使用了和与积的定义。同构的另一个方向需要使用指数，因此它仅在双笛卡尔\emph{闭}范畴中有效。这在直接的Haskell实现中并不明显：
+\begin{haskell}
+undist :: (Either b c, a) -> Either (b, a) (c, a)
+undist (Left b, a)  = Left (b, a)
+undist (Right c, a) = Right (c, a)
+\end{haskell}
+但这是因为在Haskell中柯里化是隐式的。
+
+这是该函数的无点版本：
+\begin{haskell}
+undist = uncurry (either (curry Left) (curry Right))
+\end{haskell}
+这可能不是最易读的实现，但它强调了我们需要指数的事实：我们使用\hask{curry}和\hask{uncurry}来实现映射。
+
+我们将在稍后回到这个恒等式，那时我们将拥有更强大的工具：伴随。
+
+\begin{exercise}
+证明：
+\[ 2 \times a \cong a + a \]
+其中$2$是布尔类型。首先用图解法证明，然后实现两个Haskell函数来见证这个同构。
+\end{exercise}
+
+\end{document}

@@ -1,0 +1,492 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{7}
+
+\chapter{函子}
+\section{范畴}
+
+到目前为止，我们只见过一个范畴——类型和函数的范畴。因此，让我们快速了解范畴的基本信息。
+
+一个范畴是对象和它们之间的箭头的集合。每一对可组合的箭头都可以组合。组合是结合的，并且每个对象都有一个循环的恒等箭头。
+
+类型和函数形成一个范畴的事实可以在Haskell中通过定义组合来表达：
+\begin{haskell}
+(.) :: (b -> c) -> (a -> b) -> (a -> c)
+g . f = \x -> g (f x)
+\end{haskell}
+两个函数 \hask{g} 和 \hask{f} 的组合是一个新函数，它首先将 \hask{f} 应用于其参数，然后将 \hask{g} 应用于结果。
+
+恒等是一个多态的“什么都不做”的函数：
+\begin{haskell}
+id :: a -> a
+id x = x
+\end{haskell}
+你可以很容易地确信这种组合是结合的，并且与 \hask{id} 组合不会对函数产生任何影响。
+
+基于范畴的定义，我们可以想出各种奇怪的范畴。例如，有一个没有对象和箭头的范畴。它空洞地满足所有范畴的条件。还有一个只包含一个对象和一个箭头的范畴（你能猜出这个箭头是什么吗？）。有一个包含两个不连接对象的范畴，还有一个两个对象通过一个箭头连接（加上两个恒等箭头）的范畴，等等。这些是我称之为\index{简笔范畴}简笔范畴的例子——只有少量对象和箭头的范畴。
+\subsection{集合范畴}
+
+我们也可以去掉一个范畴中的所有箭头（除了恒等箭头）。这种只有对象的范畴被称为\index{离散范畴}\emph{离散}范畴或集合\footnote{忽略“大小”问题。}。由于我们将箭头与结构关联起来，集合是一个没有结构的范畴。
+
+集合形成自己的范畴，称为\index{Set, 集合范畴}$\mathbf{Set}$\footnote{再次忽略“大小”问题，特别是所有集合的集合不存在的问题。}。该范畴中的对象是集合，箭头是集合之间的\index{函数}函数。这些函数被定义为一种特殊的关系，而关系本身被定义为对的集合。
+
+在最粗略的近似中，我们可以在集合范畴中建模编程。我们通常将类型视为值的集合，将函数视为集合论函数。这并没有错。事实上，我们迄今为止描述的所有范畴构造都有其集合论根源。范畴积是集合的笛卡尔积的推广，和是不交并，等等。
+
+范畴论提供的是更高的精确性：绝对必要的结构与多余细节之间的细微区别。
+
+例如，集合论函数并不符合我们作为程序员使用的函数的定义。我们的函数必须具有底层算法，因为它们必须由某些物理系统（无论是计算机还是人脑）计算。集合论函数比算法多得多。而且一些算法（在图灵完备的语言中）可能永远运行而不会产生结果。
+
+\subsection{对偶范畴}
+在编程中，重点是类型和函数的范畴，但我们可以使用这个范畴作为起点来构造其他范畴。
+
+其中一个范畴称为\emph{对偶}范畴。这是所有原始箭头都被反转的范畴：在原始范畴中称为箭头的源的东西现在称为其目标，反之亦然。
+
+范畴 $\mathcal{C}$ 的对偶称为 $\mathcal{C}^{op}$。我们在讨论对偶性时已经瞥见过这个范畴。$\mathcal{C}^{op}$ 的对象与 $\mathcal{C}$ 的对象相同。
+
+每当 $\mathcal{C}$ 中有一个箭头 $f \colon a \to b$ 时，$\mathcal{C}^{op}$ 中就有一个对应的箭头 $f^{op} \colon b \to a$。
+
+两个这样的箭头 $f^{op} \colon a \to b$ 和 $g^{op} \colon b \to c$ 的组合 $g^{op} \circ f^{op}$ 由箭头 $(f \circ g)^{op}$ 给出（注意顺序相反）。
+
+$\mathcal{C}$ 中的终对象是 $\mathcal{C}^{op}$ 中的始对象，$\mathcal{C}$ 中的积是 $\mathcal{C}^{op}$ 中的和，等等。
+
+\subsection{积范畴}
+
+给定两个范畴 $\mathcal{C}$ 和 $\mathcal{D}$，我们可以构造一个积范畴 $\mathcal{C} \times \mathcal{D}$。该范畴中的对象是对象对 $\langle c, d \rangle $，箭头是箭头对。
+
+如果我们在 $\mathcal{C}$ 中有一个箭头 $f \colon c \to c'$，在 $\mathcal{D}$ 中有一个箭头 $g \colon d \to d'$，那么在 $\mathcal{C} \times \mathcal{D}$ 中就有一个对应的箭头 $\langle f, g \rangle$。这个箭头从 $\langle c, d \rangle $ 到 $\langle c', d' \rangle $，两者都是 $\mathcal{C} \times \mathcal{D}$ 中的对象。如果它们的组件分别在 $\mathcal{C}$ 和 $\mathcal{D}$ 中可组合，那么这两个箭头可以组合。恒等箭头是一对恒等箭头。
+
+我们最感兴趣的两个积范畴是 $\mathcal{C} \times \mathcal{C}$ 和 $\mathcal{C}^{op} \times \mathcal{C}$，其中 $\mathcal{C}$ 是我们熟悉的类型和函数的范畴。
+
+在这两个范畴中，对象都是来自 $\mathcal{C}$ 的对象对。在第一个范畴 $\mathcal{C} \times \mathcal{C}$ 中，从 $\langle a, b \rangle $ 到 $\langle a', b' \rangle $ 的态射是一对 $\langle f \colon a \to a', g \colon b \to b' \rangle $。在第二个范畴 $\mathcal{C}^{op} \times \mathcal{C}$ 中，态射是一对 $\langle f \colon a' \to a, g \colon b \to b' \rangle $，其中第一个箭头方向相反。
+
+\subsection{切片范畴}
+
+在一个井然有序的宇宙中，对象始终是对象，箭头始终是箭头。但有时箭头的集合可以被视为对象。然而，切片范畴打破了这种整齐的分离：它们将单个箭头变成对象。
+
+切片范畴 $\cat C/c$ 描述了特定对象 $c$ 从其范畴 $\cat C$ 的角度来看的样子。它是指向 $c$ 的所有箭头的总和。但要指定一个箭头，我们需要指定它的两端。由于其中一端固定为 $c$，我们只需要指定另一端。
+
+\index{切片范畴}\emph{切片范畴} $\mathcal{C}/c$（也称为\index{上范畴}上范畴）中的一个对象是一对 $\langle e, p \rangle$，其中 $p \colon e \to c$。
+
+两个对象 $\langle e, p \rangle$ 和 $\langle e', p' \rangle$ 之间的箭头是 $\cat C$ 中的一个箭头 $f \colon e \to e'$，它使得以下三角形交换：
+
+\[
+ \begin{tikzcd}
+ e
+ \arrow[rd, "p"']
+ \arrow[rr, "f"]
+ && e'
+ \arrow[ld, "p'"]
+ \\
+ &c
+  \end{tikzcd}
+\]
+
+\subsection{余切片范畴}
+
+有一个对偶的概念，即\index{余切片范畴}余切片范畴 $c / \mathcal{C}$，也称为\index{下范畴}下范畴。它是一个从固定对象 $c$ 发出的箭头的范畴。该范畴中的对象是 $\langle a, i \colon c \to a \rangle$ 对。$c / \mathcal{C}$ 中的态射是使相关三角形交换的箭头。
+\[
+ \begin{tikzcd}
+& c
+ \arrow[rd, "j"]
+ \arrow[ld, "i"']
+ \\
+a
+\arrow[rr, "f"']
+&& b
+  \end{tikzcd}
+\]
+
+特别是，如果范畴 $\mathcal{C}$ 有一个终对象 $1$，那么余切片 $1 / \mathcal{C}$ 的对象是 $\mathcal{C}$ 中所有对象的全局元素。
+
+$1/  \mathcal{C}$ 的态射对应于箭头 $f \colon a \to b$，将 $a$ 的全局元素集合映射到 $b$ 的全局元素集合。
+
+ \[
+ \begin{tikzcd}
+& 1
+ \arrow[rd, "y"]
+ \arrow[ld, "x"']
+ \\
+a
+\arrow[rr, "f"']
+&& b
+  \end{tikzcd}
+\]
+特别是，从类型和函数的范畴构造余切片范畴，证明了我们将类型视为值的集合的直觉，其中值由类型的全局元素表示。
+
+\section{函子(Functors)}
+
+在讨论代数数据类型时，我们已经看到了函子性的例子。其核心思想是，这样的数据类型“记住”了它的创建方式，我们可以通过对它的“内容”应用一个箭头来操作这种记忆。
+
+在某些情况下，这种直觉非常具有说服力：我们将积类型视为一个“包含”其成分的对。毕竟，我们可以使用投影来检索它们。
+
+在函数对象的情况下，这一点就不那么明显了。你可以将函数对象想象为秘密存储所有可能的结果，并使用函数参数来索引它们。从\hask{Bool}出发的函数显然等价于一对值，一个对应\hask{True}，一个对应\hask{False}。将某些函数实现为查找表是一种已知的编程技巧，称为\emph{记忆化(memoization)}。
+
+尽管对以自然数作为参数的函数进行记忆化并不实际，但我们仍然可以将它们概念化为（无限的，甚至不可数的）查找表。
+
+如果你能将数据类型视为值的容器，那么应用一个函数来转换所有这些值并创建一个转换后的容器是有意义的。当这是可能的时候，我们说该数据类型是\emph{函子性的(functorial)}。
+
+同样，函数类型需要更多的怀疑暂停。你将函数对象视为一个由某种类型键控的查找表。如果你想使用另一个相关类型作为键，你需要一个将新键转换为原始键的函数。这就是为什么函数对象的函子性有一个箭头是反向的：
+\begin{haskell}
+dimap :: (a' -> a) -> (b -> b') -> (a -> b) -> (a' -> b')
+dimap f g h = g . h . f
+\end{haskell}
+你正在对一个函数\hask{h :: a -> b}应用转换，该函数有一个响应\hask{a}类型值的“接收器”，而你希望用它来处理\hask{a'}类型的输入。这只有在你有从\hask{a'}到\hask{a}的转换器时才有可能，即\hask{f :: a' -> a}。
+
+数据类型“包含”另一种类型的值的想法也可以通过说一个数据类型由另一个类型参数化来表达。例如，类型\hask{List a}由类型\hask{a}参数化。
+
+换句话说，\hask{List}将类型\hask{a}映射到类型\hask{List a}。\hask{List}本身，不带参数，被称为\emph{类型构造器(type constructor)}。
+
+\subsection{范畴之间的函子}
+
+在范畴论中，类型构造器被建模为对象到对象的映射。它是对象上的函数。这不应与对象之间的箭头混淆，后者是范畴结构的一部分。
+
+事实上，更容易想象的是范畴\emph{之间}的映射。源范畴中的每个对象都被映射到目标范畴中的一个对象。如果$a$是$\mathcal{C}$中的一个对象，那么在$\mathcal{D}$中就有一个对应的对象$F a$。
+
+函子映射，或\emph{函子(functor)}，不仅映射对象，还映射它们之间的箭头。第一个范畴中的每个箭头
+\[ f \colon a \to b\]
+在第二个范畴中都有一个对应的箭头：
+\[ F f \colon F a \to F b\]
+
+\[
+ \begin{tikzcd}
+ a 
+ \arrow[d, blue, "f"]
+\arrow[rr, dashed]
+ && F a
+  \arrow[d, red, "F f"]
+ \\
+ b 
+ \arrow[rr, dashed]
+&& F b
+  \end{tikzcd}
+\]
+我们使用相同的字母，这里是$F$，来命名对象映射和箭头映射。
+
+如果范畴提炼了\emph{结构}的本质，那么函子就是保持这种结构的映射。源范畴中相关的对象在目标范畴中也是相关的。
+
+范畴的结构由箭头及其组合定义。因此，函子必须保持组合。在一个范畴中组合的：
+\[ h = g \circ f \]
+在第二个范畴中应保持组合：
+\[ F h = F (g \circ f) = F g \circ F f \]
+我们可以在$\mathcal{C}$中组合两个箭头并将组合映射到$\mathcal{D}$，或者我们可以映射单个箭头然后在$\mathcal{D}$中组合它们。我们要求结果相同。
+\[
+ \begin{tikzcd}
+ a 
+ \arrow[d, "f"]
+\arrow[rrr, dashed]
+\arrow[dd, bend right = 70, blue, "g \circ f"']
+ &&& F a
+  \arrow[d, "F f"]
+  \arrow[dd, bend left = 70, "F g \circ F f"]
+  \arrow[dd, bend right = 70, red, "F (g \circ f)"']
+ \\
+ b 
+ \arrow[d, "g"]
+&&& F b
+ \arrow[d, "F g"]
+ \\
+ c
+ \arrow[rrr, dashed]
+&&& F c
+  \end{tikzcd}
+\]
+
+最后，函子必须保持恒等箭头：
+\[ F\, id_a = id_{F a} \]
+
+\[
+ \begin{tikzcd}
+ a 
+  \arrow[loop, blue,  "id_a"']
+\arrow[rr, dashed]
+ && F a
+  \arrow[loop, red, "F \, id_{a}"']
+  \arrow[loop, controls={+(2.5, 2.6) and +(-2, 2.5)}, "id_{F a}"']
+  \end{tikzcd}
+\]
+
+这些条件共同定义了函子保持范畴结构的含义。
+
+同样重要的是要意识到哪些条件\emph{不是}定义的一部分。例如，函子允许将多个对象映射到同一个对象。它也可以将多个箭头映射到同一个箭头，只要端点匹配。
+
+在极端情况下，任何范畴都可以映射到一个只有一个对象和一个箭头的单例范畴。
+
+此外，目标范畴中的所有对象或箭头不必被函子覆盖。在极端情况下，我们可以有一个从单例范畴到任何（非空）范畴的函子。这样的函子选择一个对象及其恒等箭头。
+
+\index{常函子}\emph{常函子(constant functor)} $\Delta_c$是一个将源范畴中的所有对象映射到目标范畴中的单个对象$c$，并将源范畴中的所有箭头映射到单个恒等箭头$id_c$的函子的例子。
+
+在范畴论中，函子通常用于在一个范畴内创建另一个范畴的模型。它们可以将多个对象和箭头合并为一个，这意味着它们产生了源范畴的简化视图。它们“抽象”了源范畴的某些方面。
+
+它们可能只覆盖目标范畴的部分内容，这意味着模型被嵌入到更大的环境中。
+
+来自某些极简的、简笔画的范畴的函子可以用于定义更大范畴中的模式。
+
+\begin{exercise}
+描述一个源为\index{行走箭头}“行走箭头”范畴的函子。它是一个简笔画范畴，有两个对象和它们之间的一个箭头（加上必需的恒等箭头）。
+\[
+ \begin{tikzcd}
+ a 
+  \arrow[loop,  "id_{a}"']
+\arrow[r, "f"]
+ & b
+  \arrow[loop, "id_{b}"']
+  \end{tikzcd}
+\]
+\end{exercise}
+\begin{exercise}
+“行走同构”范畴与“行走箭头”范畴类似，只是多了一个从$b$回到$a$的箭头。证明来自这个范畴的函子总是在目标范畴中选择一个同构。
+\end{exercise}
+
+\section{编程中的函子}
+
+自函子（Endofunctors）是最容易在编程语言中表达的一类函子。这些函子将一个范畴（在这里，是类型和函数的范畴）映射到其自身。
+
+\subsection{自函子}
+自函子的第一部分是将类型映射到类型。这是通过类型构造器（type constructors）完成的，它们是类型级别的函数。
+
+列表类型构造器 \hask{List} 将任意类型 \hask{a} 映射到类型 \hask{List a}。
+
+\hask{Maybe} 类型构造器将 \hask{a} 映射到 \hask{Maybe a}。
+
+自函子的第二部分是箭头的映射。给定一个函数 \hask{a -> b}，我们希望能够定义一个函数 \hask{List a -> List b} 或 \hask{Maybe a -> Maybe b}。这是我们之前讨论过的这些数据类型的“函子性”（functoriality）属性。函子性允许我们将任意函数\index{提升}\emph{提升}（lift）为转换后类型之间的函数。
+
+函子性可以在 Haskell 中使用\index{\hask{typeclass}}\emph{类型类}（typeclass）来表达。在这种情况下，类型类由类型构造器 \hask{f} 参数化（在 Haskell 中，我们使用小写字母表示类型构造器变量）。如果存在一个称为 \hask{fmap} 的对应函数映射，我们就说 \hask{f} 是一个 \hask{Functor}：
+\begin{haskell}
+class Functor f where
+  fmap :: (a -> b) -> (f a -> f b)
+\end{haskell}
+编译器知道 \hask{f} 是一个类型构造器，因为它被应用于类型，如 \hask{f a} 和 \hask{f b}。
+
+为了向编译器证明某个类型构造器是一个 \hask{Functor}，我们必须为其提供 \hask{fmap} 的实现。这是通过定义类型类 \hask{Functor} 的\index{类实例}\index{\hask{instance}}\emph{实例}（instance）来完成的。例如：
+\begin{haskell}
+instance Functor Maybe where
+  fmap g Nothing  = Nothing
+  fmap g (Just a) = Just (g a)
+\end{haskell}
+
+函子还必须满足一些定律：它必须保持复合和恒等。这些定律无法在 Haskell 中表达，但应由程序员检查。我们之前看到了一个不满足恒等定律的 \hask{badMap} 定义，但它仍会被编译器接受。它将为列表类型构造器 \hask{[]} 定义一个“非法”的 \hask{Functor} 实例。
+
+\begin{exercise}
+证明 \hask{WithInt} 是一个函子
+\begin{haskell}
+data WithInt a = WithInt a Int
+\end{haskell}
+\end{exercise}
+
+有一些基本的函子可能看起来微不足道，但它们是其他函子的构建块。
+
+我们有恒等自函子，它将所有对象映射到自身，并将所有箭头映射到自身。
+\begin{haskell}
+newtype Identity a = Identity a
+\end{haskell}
+\begin{exercise}
+证明 \hask{Identity} 是一个 \hask{Functor}。提示：为其实现 \hask{Functor} 实例。
+\end{exercise}
+
+我们还有一个常函子 $\Delta_c$，它将所有对象映射到单个对象 $c$，并将所有箭头映射到该对象上的恒等箭头。在 Haskell 中，它是由目标对象 \hask{c} 参数化的一族函子：
+\begin{haskell}
+data Constant c a = Constant c
+\end{haskell}
+这个类型构造器忽略其第二个参数。
+
+\begin{exercise}
+证明 \hask{(Constant c)} 是一个 \hask{Functor}。提示：类型构造器接受两个参数，但在 \hask{Functor} 实例中，它被部分应用于第一个参数。它在第二个参数上是函子性的。
+\end{exercise}
+
+\subsection{双函子}
+
+我们还看到了接受两个类型作为参数的数据构造器：积和和。它们也是函子性的，但它们不是提升单个函数，而是提升一对函数。在范畴论中，我们将这些定义为从积范畴 $\mathcal{C} \times \mathcal{C}$ 到 $\mathcal{C}$ 的函子。
+
+这样的函子将一对对象映射到一个对象，并将一对箭头映射到一个箭头。
+
+在 Haskell 中，我们将这样的函子视为称为 \hask{Bifunctor} 的单独类的成员。
+
+\begin{haskell}
+class Bifunctor f where
+  bimap :: (a -> a') -> (b -> b') -> (f a b -> f a' b')
+\end{haskell}
+同样，编译器推断 \hask{f} 是一个双参数类型构造器，因为它看到它被应用于两个类型，例如 \hask{f a b}。
+
+为了向编译器证明某个类型构造器是一个 \hask{Bifunctor}，我们定义一个实例。例如，对的双函子性可以定义为：
+\begin{haskell}
+instance Bifunctor (,) where
+  bimap g h (a, b) = (g a, h b)
+\end{haskell}
+
+\begin{exercise}
+证明 \hask{MoreThanA} 是一个双函子。
+\begin{haskell}
+data MoreThanA a b = More a (Maybe b)
+\end{haskell}
+\end{exercise}
+
+\subsection{逆变函子}
+
+来自对偶范畴 $\mathcal{C}^{op}$ 的函子称为\emph{逆变函子}（contravariant functors）。它们具有提升反向箭头的属性。常规函子有时称为\index{协变函子}\emph{协变函子}（covariant functors）。
+
+在 Haskell 中，逆变函子形成类型类 \hask{Contravariant}：
+\begin{haskell}
+class Contravariant f where
+  contramap :: (b -> a) -> (f a -> f b)
+\end{haskell}
+
+通常，将函子视为生产者和消费者是方便的。在这个类比中，（协变）函子是生产者。您可以通过应用（使用 \hask{fmap}）一个函数 \hask{a->b} 将 \hask{a} 的生产者转换为 \hask{b} 的生产者。相反，要将 \hask{a} 的消费者转换为 \hask{b} 的消费者，您需要一个反向的函数 \hask{b->a}。
+
+示例：谓词是返回 \hask{True} 或 \hask{False} 的函数：
+\begin{haskell}
+newtype Predicate a = Predicate (a -> Bool)
+\end{haskell}
+很容易看出它是一个逆变函子：
+\begin{haskell}
+instance Contravariant Predicate where
+  contramap f (Predicate h) = Predicate (h . f)
+\end{haskell}
+
+在实践中，唯一非平凡的逆变函子示例是函数对象的变体。
+
+判断给定函数类型在某个类型参数上是协变还是逆变的一种方法是为其定义中使用的类型分配极性。我们说函数的返回类型处于\emph{正}位置，因此它是协变的；而参数类型处于\emph{负}位置，因此它是逆变的。但如果你将整个函数对象放在另一个函数的负位置，那么它的极性会被反转。
+
+考虑这个数据类型：
+\begin{haskell}
+newtype Tester a = Tester ((a -> Bool) -> Bool)
+\end{haskell}
+它有一个双重负的 \hask{a}，因此处于正位置。这就是为什么它是一个协变的 \hask{Functor}。它充当 \hask{a} 的生产者：
+
+\begin{haskell}
+instance Functor Tester where
+  fmap f (Tester g) = Tester g'
+    where g' h = g (h . f)
+\end{haskell}
+
+注意，括号在这里很重要。一个类似的函数 \hask{a -> Bool -> Bool} 有一个处于\emph{负}位置的 \hask{a}。这是因为它是一个返回函数 \hask{(Bool -> Bool)} 的 \hask{a} 的函数。等效地，您可以将其解构为一个接受对的函数：\hask{(a, Bool) -> Bool}。无论哪种方式，\hask{a} 最终都处于负位置。
+
+\subsection{Profunctors}
+
+我们之前看到函数类型是函子性的。它一次提升两个函数，就像 \hask{Bifunctor} 一样，只是其中一个函数是反向的。
+
+在范畴论中，这对应于从两个范畴的积到另一个范畴的函子，其中一个是对偶范畴：它是从 $\mathcal{C}^{op} \times \mathcal{C}$ 的函子。从 $\mathcal{C}^{op} \times \mathcal{C}$ 到 $\mathbf{Set}$ 的函子称为\emph{Profunctors}。
+
+在 Haskell 中，Profunctors 形成一个类型类：
+\begin{haskell}
+class Profunctor f where
+  dimap :: (a' -> a) -> (b -> b') -> (f a b -> f a' b')
+\end{haskell}
+
+您可以将 Profunctor 视为同时是生产者和消费者的类型。它消费一个类型并生产另一个类型。
+
+函数类型可以写为中缀运算符 \hask{(->)}，它是 \hask{Profunctor} 的一个实例：
+\begin{haskell}
+instance Profunctor (->) where
+  dimap f g h = g . h . f
+\end{haskell}
+这与我们的直觉一致，即函数 \hask{a->b} 消费类型 \hask{a} 的参数并生产类型 \hask{b} 的结果。
+
+在编程中，所有非平凡的 Profunctors 都是函数类型的变体。
+
+\section{Hom-函子}
+
+任意两个对象之间的箭头构成一个集合。这个集合称为hom-集（hom-set），通常用范畴的名称后跟对象的名称来表示：
+\[ \mathcal{C}(a, b) \]
+
+我们可以将hom-集 $\mathcal{C}(a, b)$ 解释为从 $a$ 观察 $b$ 的所有方式。
+
+另一种看待hom-集的方式是说它们定义了一个映射，该映射为每对对象分配一个集合 $\mathcal{C}(a, b)$。集合本身是范畴 $\mathbf{Set}$ 中的对象。因此，我们有了一个范畴之间的映射。
+
+这个映射是函子性的。为了理解这一点，让我们考虑当我们变换两个对象 $a$ 和 $b$ 时会发生什么。我们感兴趣的是一个将集合 $\mathcal{C}(a, b)$ 映射到集合 $\mathcal{C}(a', b')$ 的变换。$\mathbf{Set}$ 中的箭头是普通函数，因此只需定义它们对集合中单个元素的作用即可。
+
+$\mathcal{C}(a, b)$ 的一个元素是箭头 $h \colon a \to b$，而 $\mathcal{C}(a', b')$ 的一个元素是箭头 $h' \colon a' \to b'$。我们知道如何将一个变换为另一个：我们需要用箭头 $g' \colon a' \to a$ 预组合 $h$，并用箭头 $g \colon b \to b'$ 后组合它。
+
+换句话说，将一对 $\langle a, b \rangle$ 映射到集合 $\mathcal{C}(a, b)$ 的映射是一个\emph{profunctor}（profunctor）：
+\[ \mathcal{C}^{op} \times \mathcal{C} \to \mathbf{Set} \]
+
+通常，我们只对变化其中一个对象而保持另一个固定感兴趣。当我们固定源对象并变化目标对象时，结果是一个函子，写作：
+\[ \mathcal{C}(a, -) \colon \mathcal{C} \to \mathbf{Set} \]
+这个函子对箭头 $g \colon b \to b'$ 的作用写作：
+\[ \mathcal{C}(a, g) \colon \mathcal{C}(a, b) \to \mathcal{C}(a, b') \]
+并由后组合给出：
+\[\mathcal{C}(a, g) = (g \circ -) \]
+
+变化 $b$ 意味着将焦点从一个对象切换到另一个对象，因此完整的函子 $\mathcal{C}(a, -)$ 将所有从 $a$ 发出的箭头组合成从 $a$ 的视角看范畴的一个连贯视图。它是“$a$ 的世界”。
+
+相反，当我们固定目标并变化hom-函子的源时，我们得到一个逆变函子：
+\[ \mathcal{C}(-, b) \colon \mathcal{C}^{op} \to \mathbf{Set} \]
+它对箭头 $g' \colon a' \to a$ 的作用写作：
+\[ \mathcal{C}(g', b) \colon \mathcal{C}(a, b) \to \mathcal{C}(a', b) \]
+并由预组合给出：
+\[\mathcal{C}(g', b) = (- \circ g') \]
+
+函子 $\mathcal{C}(-, b)$ 将所有指向 $b$ 的箭头组织成一个连贯的视图。它是 $b$ 的“世界眼中的图像”。
+
+我们现在可以重新表述同构一章中的结果。如果两个对象 $a$ 和 $b$ 是同构的，那么它们的hom-集也是同构的。特别是：
+\[\mathcal{C}(a, x) \cong \mathcal{C}(b, x)\]
+和
+\[\mathcal{C}(x, a) \cong \mathcal{C}(x, b)\]
+我们将在下一章讨论自然性条件。
+
+另一种看待hom-函子 $\cat C(a, -)$ 的方式是将其视为一个预言机，它回答以下问题：“$a$ 是否与我相连？”如果集合 $\cat C(a, x)$ 为空，则答案为否定：“$a$ 与 $x$ 不相连。”否则，集合 $\cat C(a, x)$ 的每个元素都是这种连接存在的证明。
+
+相反，逆变函子 $\cat C (-, a)$ 回答以下问题：“我是否与 $a$ 相连？”
+
+总的来说，profunctor $\cat C(x, y)$ 在对象之间建立了一个\index{证明相关关系}\emph{证明相关}的关系。集合 $\cat C(x, y)$ 的每个元素都是 $x$ 与 $y$ 相连的证明。如果集合为空，则这两个对象不相关。
+
+\section{函子复合}
+
+就像我们可以复合函数一样，我们也可以复合函子。如果两个函子中一个的目标范畴是另一个的源范畴，那么它们就是可复合的。
+
+在对象上，$G$ 在 $F$ 之后的函子复合首先将 $F$ 应用于一个对象，然后将 $G$ 应用于结果；在箭头上也是如此。
+
+显然，你只能复合可复合的函子。然而，所有的\emph{自函子}（endofunctors）都是可复合的，因为它们的目标范畴与源范畴相同。
+
+在 Haskell 中，函子是一个参数化的数据类型，因此两个函子的复合也是一个参数化的数据类型。在对象上，我们定义：
+\begin{haskell}
+newtype Compose g f a = Compose (g (f a))
+\end{haskell}
+编译器推断出 \hask{f} 和 \hask{g} 必须是类型构造函数，因为它们被应用于类型：\hask{f} 被应用于类型参数 \hask{a}，而 \hask{g} 被应用于结果类型。
+
+或者，你可以通过提供\index{种类签名}\emph{种类签名}（kind signature）来告诉编译器 \hask{Compose} 的前两个参数是类型构造函数。你还应该导入定义了 \hask{Type} 的 \hask{Data.Kind} 库：
+\begin{haskell}
+import Data.Kind
+\end{haskell}
+
+种类签名类似于类型签名，但它可以用来描述操作类型的函数。
+
+常规类型的种类是 \hask{Type}。类型构造函数的种类是 \hask{Type -> Type}，因为它们将类型映射到类型。
+
+\hask{Compose} 接受两个类型构造函数并生成一个类型构造函数，因此它的种类签名是：
+\begin{haskell}
+(Type -> Type) -> (Type -> Type) -> (Type -> Type) 
+\end{haskell}
+完整的定义是：
+\begin{haskell}
+data Compose :: (Type -> Type) -> (Type -> Type) -> (Type -> Type) 
+  where
+    Compose :: (g (f a)) -> Compose g f a
+\end{haskell}
+
+任何两个类型构造函数都可以这样复合。在这一点上，没有要求它们必须是函子。
+
+然而，如果我们想使用类型构造函数的复合来提升函数，即 \hask{g} 在 \hask{f} 之后，那么它们必须是函子。这一要求在实例声明中被编码为约束：
+\begin{haskell}
+instance (Functor g, Functor f) => Functor (Compose g f) where
+  fmap h (Compose gfa) = Compose (fmap (fmap h) gfa)
+\end{haskell}
+约束 \hask{(Functor g, Functor f)} 表示两个类型构造函数都必须是 \hask{Functor} 类的实例。约束后面跟着一个双箭头。
+
+我们正在建立其函子性的类型构造函数是 \hask{Compose f g}，它是 \hask{Compose} 对两个函子的部分应用。
+
+在 \hask{fmap} 的实现中，我们对数据构造函数 \hask{Compose} 进行模式匹配。它的参数 \hask{gfa} 的类型是 \hask{g (f a)}。我们使用一个 \hask{fmap} 来“进入” \hask{g}。然后我们使用 \hask{(fmap h)} 来“进入” \hask{f}。编译器通过分析类型知道使用哪个 \hask{fmap}。
+
+你可以将复合函子视为容器的容器。例如，\hask{[]} 与 \hask{Maybe} 的复合是一个可选值的列表。
+
+\begin{exercise}
+定义一个 \hask{Functor} 在 \hask{Contravariant} 之后的复合。提示：你可以重用 \hask{Compose}，但你必须提供一个不同的实例声明。
+\end{exercise}
+
+
+\subsection{范畴的范畴}
+
+我们可以将函子视为范畴之间的箭头。正如我们刚刚看到的，函子是可复合的，并且很容易验证这种复合是结合的。我们还有每个范畴的恒等（自）函子。因此，范畴本身似乎形成了一个范畴，我们称之为 $\mathbf{Cat}$。
+
+这就是数学家开始担心“大小”问题的地方。这是说存在潜在悖论的简写。因此，正确的说法是 $\mathbf{Cat}$ 是一个\emph{小}范畴的范畴。但只要我们不涉及存在性证明，我们就可以忽略大小问题。
+
+\end{document}

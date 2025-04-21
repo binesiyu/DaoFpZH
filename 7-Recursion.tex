@@ -1,0 +1,418 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{6}
+
+\chapter{递归}
+
+``道生一。
+
+一生二。
+
+二生三。
+
+三生万物。''
+
+
+\vspace{10pt}
+
+当你站在两面镜子之间时，你会看到自己的倒影，倒影的倒影，倒影的倒影的倒影，依此类推。每个倒影都是根据前一个倒影定义的，但它们共同产生了无限。
+
+递归是一种分解模式，它将单个任务分解为多个步骤，步骤的数量可能是无限的。
+
+递归基于对怀疑的悬置。你面临的任务可能需要任意多个步骤。你暂时假设你知道如何解决它。然后你问自己一个问题：“如果我已经解决了除最后一步之外的所有问题，我将如何迈出最后一步？”
+
+\section{自然数}
+
+自然数对象$N$并不包含数字。对象没有内部结构。结构由箭头定义。
+
+我们可以使用从终端对象出发的箭头来定义一个特殊元素。按照惯例，我们将这个箭头称为$Z$，表示“零”。
+\[ Z \colon 1 \to N \]
+但我们必须能够定义无限多个箭头，以说明对于每个自然数，都有一个比它大一的数。
+
+我们可以通过以下方式形式化这一陈述：假设我们知道如何创建一个自然数$n \colon 1 \to N$。我们如何迈出下一步，指向下一个数——它的后继？
+
+这个下一步可以简单地将$n$与一个从$N$回到$N$的箭头进行后复合。这个箭头不应该是恒等箭头，因为我们希望一个数的后继与该数不同。但一个这样的箭头，我们称之为$S$，表示“后继”，就足够了。
+
+对应于$n$的后继的元素由以下复合给出：
+\[ 1 \xrightarrow{n} N \xrightarrow{S} N\]
+（有时我们在单个图中多次绘制同一个对象，以便拉直循环箭头。）
+
+特别地，我们可以将$One$定义为$Z$的后继：
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[rr, bend left, "One"]
+ \arrow[r, "Z"]
+ &N
+  \arrow[r, "S"]
+&N
+  \end{tikzcd}
+\]
+将$Two$定义为$Z$的后继的后继：
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[rrr, bend left, "Two"]
+ \arrow[r, "Z"]
+ &N
+  \arrow[r, "S"]
+&N
+  \arrow[r, "S"]
+ &N
+ \end{tikzcd}
+\]
+依此类推。
+
+\subsection{引入规则}
+
+两个箭头$Z$和$S$作为自然数对象$N$的引入规则。其中的一个是递归的：$S$使用$N$作为其源和目标。
+
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[r, "Z"]
+ &N
+ \arrow[out=135, in=45, loop, "S"]
+ \end{tikzcd}
+\]
+这两个引入规则直接翻译为Haskell：
+
+\begin{haskell}
+data Nat where
+  Z :: Nat
+  S :: Nat -> Nat
+\end{haskell}
+它们可以用来定义任意的自然数；例如：
+
+\begin{haskell}
+zero, one, two :: Nat
+zero = Z
+one  = S zero
+two  = S one
+\end{haskell}
+
+这种自然数类型的定义在实际中并不十分有用。然而，它通常用于定义类型级别的自然数，其中每个数字都是其自己的类型。
+
+你可能会在\index{皮亚诺数}\emph{皮亚诺算术}的名称下遇到这种构造。
+
+\subsection{消除规则}
+
+引入规则是递归的这一事实在定义消除规则时稍微复杂了一些。我们将遵循前面章节的模式，首先假设我们有一个从$N$出发的映射：
+\[ h \colon N \to a \]
+然后看看我们能从中推断出什么。
+
+之前，我们能够将这样的$h$分解为更简单的映射（对于和与积的映射对；对于指数的积的映射）。
+
+$N$的引入规则看起来与和的引入规则相似（它要么是$Z$，要么是后继），因此我们期望$h$可以拆分为两个箭头。确实，我们可以通过复合$h \circ Z$轻松得到第一个箭头。这是一个选择$a$元素的箭头。我们称之为$\mathit{init}$：
+\[\mathit{init} \colon 1 \to a \]
+但没有明显的方法找到第二个箭头。
+
+为了看到这一点，让我们扩展$N$的定义：
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[r, "Z"]
+ &N
+  \arrow[r, "S"]
+&N
+  \arrow[r, "S"]
+&N
+& ...
+  \end{tikzcd}
+\]
+并将$h$和$\text{init}$插入其中：
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[r, "Z"]
+ \arrow[rd, "\mathit{init}"']
+ &N
+  \arrow[r, "S"]
+\arrow[d, dashed, "h"]
+&N
+  \arrow[r, "S"]
+\arrow[d, dashed, "h"]
+&N
+\arrow[d, dashed, "h"]
+& ...
+\\
+& a
+& a
+& a
+  \end{tikzcd}
+\]
+
+直觉上，从$N$到$a$的箭头表示$a$的元素序列$a_n$。第零个元素由
+\[a_0=\mathit{init}\]
+给出。下一个元素是
+\[a_1 = h \circ S \circ Z \]
+接着是
+\[a_2 = h \circ S \circ S \circ Z \]
+依此类推。
+
+因此，我们用一个箭头$h$替换了无限多个箭头$a_n$。诚然，新的箭头更简单，因为它们表示$a$的元素，但它们的数量是无限的。
+
+问题在于，无论如何看待它，从$N$出发的任意映射都包含无限的信息。
+
+我们必须大幅简化问题。由于我们使用单个箭头$S$生成所有自然数，我们可以尝试使用单个箭头$a \to a$生成所有元素$a_n$。我们将这个箭头称为$\mathit{step}$：
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[r, "Z"]
+ \arrow[rd, "\mathit{init}"']
+ &N
+  \arrow[r, "S"]
+\arrow[d, dashed, "h"]
+&N
+\arrow[d, dashed, "h"]
+\\
+& a
+\arrow[r, "\mathit{step}"]
+& a
+  \end{tikzcd}
+\]
+由这样的对$\mathit{init}$和$\mathit{step}$生成的从$N$出发的映射称为\emph{递归的}。并非所有从$N$出发的映射都是递归的。事实上，递归映射非常少；但递归映射足以定义自然数对象。
+
+我们使用上述图作为消除规则。我们规定，每个从$N$出发的递归映射$h$与一对$\mathit{init}$和$\mathit{step}$一一对应。
+
+这意味着\emph{求值规则}（为给定的$h$提取$(\mathit{init}, \mathit{step})$）不能为任意箭头$h \colon N \to a$制定，只能为那些先前使用$(\mathit{init}, \mathit{step})$递归定义的箭头制定。
+
+箭头$\mathit{init}$总是可以通过复合$h \circ Z$恢复。箭头$\mathit{step}$是以下方程的解：
+\[ \mathit{step} \circ h = h \circ S \]
+如果$h$是使用某个$\mathit{init}$和$\mathit{step}$定义的，那么这个方程显然有解。
+
+重要的是，我们要求这个解是\emph{唯一的}。
+
+直觉上，对$\mathit{init}$和$\mathit{step}$生成元素序列$a_0$，$a_1$，$a_2$，...如果两个箭头$h$和$h'$由相同的对$(\mathit{init}, \mathit{step})$给出，这意味着它们生成的序列是相同的。
+
+因此，如果$h$与$h'$不同，这意味着$N$包含的不仅仅是元素序列$Z$，$S Z$，$S(S Z)$，...例如，如果我们将$-1$添加到$N$中（即让$Z$成为某人的后继），我们可能会有$h$和$h'$在$-1$处不同，但由相同的$\mathit{init}$和$\mathit{step}$生成。唯一性意味着在$Z$和$S$生成的数字之前、之后或之间没有自然数。
+
+我们在这里讨论的消除规则对应于\emph{原始递归}。我们将在关于依赖类型的章节中看到这个规则的更高级版本，对应于归纳原理。
+
+\subsection{在编程中}
+
+消除规则可以在Haskell中实现为递归函数：
+
+\begin{haskell}
+rec :: a -> (a -> a) -> (Nat -> a)
+rec init step = \n ->
+  case n of
+    Z     -> init
+    (S m) -> step (rec init step m)
+\end{haskell}
+
+这个单一的函数，称为\emph{递归器}，足以实现所有自然数的递归函数。例如，这是我们如何实现加法：
+
+\begin{haskell}
+plus :: Nat -> Nat -> Nat
+plus n = rec init step
+  where
+    init = n
+    step = S
+\end{haskell}
+这个函数将\hask{n}作为参数，并生成一个函数（闭包），该函数接受另一个数字并将其与\hask{n}相加。
+
+在实践中，程序员更喜欢直接实现递归——这种方法相当于内联递归器\hask{rec}。以下实现可能更容易理解：
+\begin{haskell}
+plus n m = case m of
+  Z -> n
+  (S k) -> S (plus k n)
+\end{haskell}
+可以理解为：如果\hask{m}为零，则结果为\hask{n}。否则，如果\hask{m}是某个\hask{k}的后继，则结果是\hask{k + n}的后继。这与说\hask{init = n}和\hask{step = S}完全相同。
+
+在命令式语言中，递归通常被迭代取代。从概念上讲，迭代似乎更容易理解，因为它对应于顺序分解。序列中的步骤通常遵循某种自然顺序。这与递归分解形成对比，在递归分解中，我们假设我们已经完成了到第$n$步的所有工作，并将该结果与下一个连续步骤结合起来。
+
+另一方面，递归在处理递归定义的数据结构（如列表或树）时更为自然。
+
+这两种方法是等价的，编译器通常将递归函数转换为循环，这称为\emph{尾递归优化}。
+
+\begin{exercise}
+使用递归器实现一个将\hask{Nat}转换为\hask{Int}的函数。
+\end{exercise}
+
+\begin{exercise}
+将加法的柯里化版本实现为从$N$到函数对象$N^N$的映射。提示：在递归器中使用这些类型：
+\begin{haskell}
+init :: Nat -> Nat
+step :: (Nat -> Nat) -> (Nat -> Nat)
+\end{haskell}
+
+\end{exercise}
+
+\section{列表}
+
+事物列表要么为空，要么是一个事物后跟一个事物列表。
+
+这个递归定义转化为类型$L_a$（$a$的列表）的两个引入规则：
+\begin{align*}
+ \text{Nil} &\colon 1 \to L_a \\
+ \text{Cons} &\colon a \times L_a \to L_a 
+\end{align*}
+$\text{Nil}$元素描述一个空列表，$\text{Cons}$从头部和尾部构造一个列表。
+
+以下图描述了投影和列表构造函数之间的关系。投影提取使用$\text{Cons}$构造的列表的头部和尾部。
+\[
+ \begin{tikzcd}
+ & a \times L_a
+ \arrow[ld, "fst"]
+ \arrow[rd,  "snd"']
+ \arrow[rd, bend left=60, red, "\text{Cons}"]
+ && 1
+ \arrow[ld, red, "\text{Nil}"]
+ \\
+ a
+&&L_a
+  \end{tikzcd}
+\]
+
+这个描述可以立即翻译为Haskell：
+\begin{haskell}
+data List a where
+  Nil  :: List a
+  Cons :: (a, List a) -> List a
+\end{haskell}
+
+
+
+\subsection{消除规则}
+
+假设我们有一个从$a$的列表到某个任意类型$c$的映射：
+\[h \colon L_a \to c\]
+这是我们如何将其插入列表定义的方式：
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[r, "\text{Nil}"]
+ \arrow[rd, "\mathit{init}"']
+ &L_a
+\arrow[d, dashed, "h"]
+&a \times L_a
+  \arrow[l, "\text{Cons}"']
+\arrow[d, dashed, "id_a \times h"]
+\\
+& c
+& a \times c
+\arrow[l, "\mathit{step}"]
+  \end{tikzcd}
+\]
+我们使用积的函子性将$(id_a, h)$应用于积$a \times L_a$。
+
+类似于自然数对象，我们可以尝试定义两个箭头，$\mathit{init} = h \circ \text{Nil}$和$\mathit{step}$。箭头$\mathit{step}$是以下方程的解：
+\[ \mathit{step} \circ (id_a \times h) = h \circ \text{Cons} \]
+同样，并非每个$h$都可以简化为这样的一对箭头。
+
+然而，给定$\mathit{init}$和$\mathit{step}$，我们可以定义一个$h$。这样的函数称为\emph{折叠}，或列表的范畴同态。
+
+这是Haskell中的列表递归器：
+\begin{haskell}
+recList :: c -> ((a, c) -> c) -> (List a -> c)
+recList init step = \as ->
+  case as of 
+    Nil          -> init
+    Cons (a, as) -> step (a, recList init step as)
+\end{haskell}
+给定\hask{init}和\hask{step}，它生成一个从列表出发的映射。
+
+列表是如此基本的数据类型，以至于Haskell为其内置了语法。类型\hask{(List a)}写为\hask{[a]}。\hask{Nil}构造函数是一对空的方括号，\hask{[]}，\hask{Cons}构造函数是中缀冒号\hask{(:)}。
+
+我们可以对这些构造函数进行模式匹配。从列表出发的通用映射具有以下形式：
+\begin{haskell}
+h :: [a] -> c
+h []      = -- 空列表的情况
+h (a : as) = -- 非空列表的头部和尾部的情况
+\end{haskell}
+
+对应于列表递归器\hask{recList}，以下是标准库中函数\hask{foldr}（右折叠）的类型签名：
+\begin{haskell}
+foldr :: (a -> c -> c) -> c -> [a] -> c
+\end{haskell}
+以下是一个可能的实现：
+\begin{haskell}
+foldr step init = \as ->
+  case as of
+    [] -> init
+    a : as -> step a (foldr step init as)
+\end{haskell}
+
+作为示例，我们可以使用\hask{foldr}计算自然数列表的元素之和：
+\begin{haskell}
+sum :: [Nat] -> Nat
+sum = foldr plus Z
+\end{haskell}
+
+
+\begin{exercise}
+考虑在列表定义中将$a$替换为终端对象时会发生什么。提示：自然数的基一编码是什么？
+\end{exercise}
+\begin{exercise}
+有多少映射$h \colon L_a \to 1 + a$？我们可以使用列表递归器获得所有这些映射吗？Haskell函数的签名如何：
+\begin{haskell}
+h :: [a] -> Maybe a
+\end{haskell}
+\end{exercise}
+\begin{exercise}
+实现一个函数，如果列表足够长，则从列表中提取第三个元素。提示：使用\hask{Maybe a}作为结果类型。
+\end{exercise}
+
+\section{函子性}
+
+函子性大致意味着能够转换数据结构的“内容”。列表$L_a$的内容是类型$a$。给定一个箭头$f \colon a \to b$，我们需要定义列表的映射$h \colon L_a \to L_b$。
+
+列表由映射出属性定义，因此让我们将消除规则的目标$c$替换为$L_b$。我们得到：
+
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[r, "\text{Nil}_a"]
+ \arrow[rd, "\mathit{init}"']
+ &L_a
+\arrow[d, dashed, "h"]
+&a \times L_a
+  \arrow[l, "\text{Cons}_a"']
+\arrow[d, dashed, "id_a \times h"]
+\\
+& L_b
+& a \times L_b
+\arrow[l, "\mathit{step}"]
+  \end{tikzcd}
+\]
+由于我们在这里处理两个不同的列表，我们必须区分它们的构造函数。例如，我们有：
+\begin{align*}
+\text{Nil}_a &\colon 1 \to L_a \\
+\text{Nil}_b &\colon 1 \to L_b 
+\end{align*}
+$\text{Cons}$也是如此。
+
+$\mathit{init}$的唯一候选是$\text{Nil}_b$，这意味着$h$作用于$a$的空列表时生成$b$的空列表：
+\[ h \circ \text{Nil}_a = \text{Nil}_b \]
+
+剩下的就是定义箭头：
+\[\mathit{step} \colon a \times L_b \to L_b\]
+我们可以猜测：
+\[ \mathit{step} = \text{Cons}_b \circ (f \times id_{L_b}) \]
+
+这对应于Haskell函数：
+
+\begin{haskell}
+mapList :: (a -> b) -> List a -> List b
+mapList f = recList init step
+  where
+    init = Nil
+    step (a, bs) = Cons (f a, bs)
+\end{haskell}
+或者，使用内置的列表语法并内联递归器，
+\begin{haskell}
+map :: (a -> b) -> [a] -> [b]
+map f [] = []
+map f (a : as) = f a : map f as
+\end{haskell}
+
+你可能会想知道是什么阻止我们选择$\mathit{step} = \mathit{snd}$，从而导致：
+\begin{haskell}
+badMap :: (a -> b) -> [a] -> [b]
+badMap f [] = []
+badMap f (a : as) = badMap f as
+\end{haskell}
+我们将在下一章中看到为什么这是一个糟糕的选择。（提示：当我们对$id$应用\hask{badMap}时会发生什么？）
+
+\end{document}

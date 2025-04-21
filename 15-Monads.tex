@@ -1,0 +1,1129 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{14}
+
+\chapter{单子(Monads)}
+
+当在编程语境中解释单子时，很难在关注函子(functors)的同时看到共同模式。要理解单子，你必须深入函子内部，并解读代码字里行间的含义。有时人们说单子让我们重载了分号。这是因为在许多命令式语言中，分号用于操作序列化。在函数式语言中，单子扮演着序列化带副作用计算的角色。
+
+\section{副作用的顺序组合}
+
+并行组合作为顺序组合的特例。
+
+---
+
+在命令式语言中，带副作用计算的组合方式是使用常规的函数组合来处理值，而让副作用随意地自行组合。
+
+当我们将带副作用计算表示为纯函数时，我们面临组合两个形式如下的函数的问题：
+\begin{haskell}
+g :: a -> f b
+h :: b -> f c
+\end{haskell}
+在所有感兴趣的情况下，类型构造器\hask{f}恰好是一个\hask{Functor}，因此我们在接下来的讨论中假设这一点。
+
+天真的方法是将第一个函数的结果解包，将值传递给下一个函数，然后在侧面组合两个函数的副作用，并将它们与第二个函数的结果结合。这并不总是可能的，即使对于我们迄今为止研究的情况也是如此，更不用说对于任意类型构造器了。
+
+为了论证起见，看看我们如何为\hask{Maybe}函子做到这一点是有启发性的。如果第一个函数返回\hask{Just}，我们对其进行模式匹配以提取内容，并用它调用下一个函数。
+
+但如果第一个函数返回\hask{Nothing}，我们就没有值来调用第二个函数。我们必须短路它，并直接返回\hask{Nothing}。因此组合是可能的，但这意味着通过基于第一个调用的副作用跳过第二个调用来修改控制流。
+
+对于某些函子，副作用的组合是可能的，而对于其他函子则不然。我们如何描述这些“好”的函子？
+
+对于一个函子来编码可组合的副作用，我们至少必须能够实现以下多态高阶函数：
+\begin{haskell}
+composeWithEffects :: Functor f => 
+       (b -> f c) -> (a -> f b) -> (a -> f c)
+\end{haskell}
+这与常规的函数组合非常相似：
+\begin{haskell}
+(.) :: (b -> c) -> (a -> b) -> (a -> c)
+\end{haskell}
+因此很自然地会问是否存在一个范畴，其中前者定义了箭头的组合。让我们看看构建这样一个范畴还需要什么。
+
+在这个新范畴中，对象与之前的Haskell类型相同。但一个箭头，我们将其写为$a \twoheadrightarrow b$，是作为一个Haskell函数实现的：
+\begin{haskell}
+g :: a -> f b
+\end{haskell}
+我们的\hask{composeWithEffects}然后可以用于实现这些箭头的组合。
+
+要拥有一个范畴，我们要求这种组合是结合的。我们还需要每个对象\hask{a}的一个单位箭头。这是一个箭头$a \twoheadrightarrow a$，因此它对应于一个Haskell函数：
+\begin{haskell}
+idWithEffects :: a -> f a
+\end{haskell}
+它必须相对于\hask{composeWithEffects}表现得像单位元。
+
+看待这个箭头的另一种方式是，它允许你为任何类型\hask{a}的值添加一个平凡的副作用。这是一个与任何其他副作用结合时对其不做任何事的副作用。我们之前在\hask{Applicative}函子的\hask{pure}定义中见过这一点。
+
+我们刚刚定义了一个单子！经过一些重命名和重新排列，我们可以将其写为一个类型类：
+\begin{haskell}
+class Functor m => Monad m where
+  (<=<) :: (b -> m c) -> (a -> m b) -> (a -> m c)
+  return :: a -> m a
+\end{haskell}
+中缀运算符\hask{<=<}替换了函数\hask{composeWithEffects}。\hask{return}函数是我们新范畴中的单位箭头。（这不是你在Haskell的\hask{Prelude}中找到的单子定义，但正如我们很快将看到的，它与之等价。）
+
+作为练习，让我们为\hask{Maybe}定义\hask{Monad}实例。“鱼”运算符\hask{<=<}组合了两个函数：
+\begin{haskell}
+f :: a -> Maybe b
+g :: b -> Maybe c
+\end{haskell}
+成为一个类型为\hask{a -> Maybe c}的函数。这个组合的单位\hask{return}，将值封装在\hask{Just}构造器中。
+\begin{haskell}
+instance Monad Maybe where
+  g <=< f = \a -> case f a of
+                    Nothing -> Nothing
+                    Just b -> g b
+  return = Just  
+\end{haskell}
+
+你可以很容易地让自己相信范畴律是满足的。特别是组合\hask{ return <=< g }与\hask{g}相同，\hask{ f <=< return }与\hask{f}相同。结合性的证明也相当直接：如果任何函数返回\hask{Nothing}，结果就是\hask{Nothing}；否则它只是一个直接的函数组合，这是结合的。
+
+我们刚刚定义的范畴称为单子\hask{m}的\index{Kleisli范畴}\emph{Kleisli范畴}。函数\hask{a -> m b}称为\index{Kleisli箭头}\emph{Kleisli箭头}。它们使用\hask{<=<}进行组合，单位箭头称为\hask{return}。
+
+在副作用部分列出的所有效果都是\hask{Monad}实例。如果你将它们视为类型构造器，很难看出它们之间的任何相似之处。每种效果都不同。它们的共同点是它们可以用来实现\emph{可组合的}Kleisli箭头。
+
+正如老子所说：组合是发生在事物\emph{之间}的事情。当我们将注意力集中在事物上时，我们常常忽略了间隙中的东西。
+
+\section{其他定义}
+
+使用Kleisli箭头定义单子(monad)的优势在于，单子法则就是Kleisli范畴的结合律和单位律。单子还有另外两个等价的定义，一个受数学家青睐，另一个则更受程序员欢迎。
+
+首先，我们注意到鱼操作符(fish operator)接受两个函数作为参数。函数的唯一用途就是应用于某个参数。当我们应用第一个函数\hask{ f :: a -> m b }时，会得到一个类型为\hask{ m b}的值。此时如果没有\hask{m}是函子(functor)这一事实，我们就会陷入困境。函子性允许我们将第二个函数\hask{ g :: b -> m c }应用于\hask{ m b}。实际上，通过\hask{m}提升\hask{g}后的类型为：
+\begin{haskell}
+m b -> m (m c)
+\end{haskell}
+这几乎就是我们想要的结果。如果我们能把\hask{m(m c)}展平为\hask{m c}就好了。这种展平操作，如果可能的话，称为\hask{join}。换句话说，如果我们有：
+\begin{haskell}
+join ::  m (m a) -> m a
+\end{haskell}
+我们就可以实现\hask{<=<}：
+\begin{haskell}
+g <=< f = \a -> join (fmap g (f a))
+\end{haskell}
+或者，使用无点(point-free)表示法：
+\begin{haskell}
+g <=< f = join . fmap g . f
+\end{haskell}
+
+反过来，我们也可以用\hask{<=<}来实现\hask{join}：
+\begin{haskell}
+join = id <=< id
+\end{haskell}
+后一个定义可能不会立即显而易见，直到你意识到最右边的\hask{id}应用于\hask{m (m a)}，而最左边的\hask{id}应用于\hask{m a}。我们将Haskell函数：
+\begin{haskell}
+m (m a) -> m (m a)
+\end{haskell}
+重新解释为Kleisli范畴中的箭头$ m (m a) \twoheadrightarrow m a$。类似地，函数：
+\begin{haskell}
+m a -> m a
+\end{haskell}
+实现了一个Kleisli箭头$m a \twoheadrightarrow a$。它们的Kleisli组合产生了一个Kleisli箭头$m (m a) \twoheadrightarrow a$或一个Haskell函数：
+\begin{haskell}
+m (m a) -> m a
+\end{haskell}
+
+这引导我们得到了用\hask{join}和\hask{return}定义的等价单子定义：
+\begin{haskell}
+class Functor m => Monad m where
+  join :: m (m a) -> m a
+  return :: a -> m a
+\end{haskell}
+
+这仍然不是你在标准Haskell \hask{Prelude}中找到的定义。由于鱼操作符是点操作符的泛化，使用它就相当于无点编程。它让我们可以在不命名中间值的情况下组合箭头。尽管有些人认为无点程序更优雅，但大多数程序员发现它们难以理解。
+
+从程序的角度来看，顺序函数组合实际上分两步完成：我们先应用第一个函数，然后将第二个函数应用于结果。显式命名中间结果通常有助于理解发生了什么。
+
+要在Kleisli箭头上实现同样的效果，我们必须知道如何将第二个Kleisli箭头应用于一个命名的单子值——第一个Kleisli箭头的结果。实现这一功能的函数称为\emph{bind}，并写为中缀运算符：
+\begin{haskell}
+(>>=) :: m a -> (a -> m b) -> m b
+\end{haskell}
+显然，我们可以用bind来实现Kleisli组合：
+
+\begin{haskell}
+g <=< f = \a -> (f a) >>= g
+\end{haskell}
+
+反过来，bind也可以用Kleisli箭头来实现：
+\begin{haskell}
+ma >>= k = (k <=< id) ma
+\end{haskell}
+
+这引导我们得到了以下定义：
+\begin{haskell}
+class Monad m where
+  (>>=) :: m a -> (a -> m b) -> m b
+  return :: a -> m a 
+\end{haskell}
+这几乎就是你在\hask{Prelude}中找到的定义，除了额外的\hask{Applicative}约束。我们接下来会讨论它。
+
+我们也可以用bind来实现\hask{join}：
+\begin{haskell}
+join  :: (Monad m) => m (m a) -> m a
+join mma =  mma >>= id
+\end{haskell}
+Haskell函数\hask{id}从\hask{m a}到\hask{m a}，或者作为Kleisli箭头，$m a \twoheadrightarrow a$。
+
+有趣的是，使用bind定义的\hask{Monad}自动成为函子。它的提升函数称为\hask{liftM}
+\begin{haskell}
+liftM :: Monad m => (a -> b) -> (m a -> m b)
+liftM f ma = ma >>= (return . f)
+\end{haskell}
+
+\subsection{作为应用函子的单子}
+
+在笛卡尔范畴中，每个单子都是松弛幺半群的。事实上，如果你知道如何顺序组合有副作用的计算，你就知道如何并行组合它们。如果第一个计算的结果没有作为第二个计算的输入使用，它们就可以并行完成。另一方面，副作用总是顺序组合的。
+
+在Haskell中，我们可以为任何\hask{Monad}定义\hask{Monoidal}实例：
+\begin{haskell}
+instance Monad m => Monoidal m where
+    unit = return ()
+    ma >*< mb = ma >>= 
+         (\a -> mb >>= 
+             \b -> return (a, b))
+\end{haskell}
+你会注意到，最后的\hask{return}需要访问\hask{a}和\hask{b}，它们是在外部环境中定义的。如果单子不强，这将是不可能的。
+
+正如我们之前讨论的，每个Haskell函子都是强的，所以Haskell中的每个单子由于是函子而都是强的。这很重要，因为我们希望单子代码能够访问环境。
+
+在笛卡尔\emph{闭}范畴中，每个单子\footnote{再次强调，正确的说法是"每个富集单子"}，作为\hask{Monoidal}，自动成为\hask{Applicative}。我们可以通过实现\hask{ap}直接展示这一点，它具有与splat运算符相同的类型签名：
+\begin{haskell}
+ap :: (Monad m) => m (a -> b) -> m a -> m b
+ap fs as = fs >>= 
+    (\f -> as >>= 
+        \a -> return (f a))
+\end{haskell}
+我们也可以使用单子的\hask{return}作为应用函子的\hask{pure}。
+
+单子与应用函子之间的这种关系在Haskell中通过使\hask{Applicative}成为\hask{Monad}的超类来表达：
+\begin{haskell}
+class Applicative m => Monad m where
+    (>>=)       :: forall a b. m a -> (a -> m b) -> m b
+    return      :: a -> m a
+    return      = pure
+\end{haskell}
+
+反之则不成立：并非每个\hask{Applicative}都是\hask{Monad}。标准的反例是封装在\hask{ZipList}中的列表函子的\hask{Applicative}实例。
+
+当为Haskell类型构造器实例化单子时，我们将定义拆分到三个类型类中：\hask{Functor}、\hask{Applicative}和\hask{Monad}。在大多数情况下，\hask{Functor}实例可以自动派生。如果我们手头还没有完整的\hask{Applicative}实例，我们使用\hask{ap}来定义splat运算符。\hask{Applicative}和\hask{Monad}实例的定义顺序无关紧要。
+
+让我们通过一个简单的例子来说明这一点：
+\begin{haskell}
+data Id a = MakeId { getId :: a }
+    deriving Functor
+\end{haskell}
+\hask{Applicative}实例定义了\hask{pure}和\hask{<*>}：
+\begin{haskell}
+instance Applicative Id where
+    pure = MakeId 
+    (<*>) = ap
+\end{haskell}
+后者使用了在\hask{Control.Monad}中定义的\hask{ap}函数：
+\begin{haskell}
+import Control.Monad (ap)
+\end{haskell}
+最后，bind在\hask{Monad}实例中定义：
+\begin{haskell}
+instance Monad Id where
+    ma >>= k = k (getId ma)
+\end{haskell}
+在现代Haskell中，应用函子的\hask{pure}取代了单子的\hask{return}。
+
+在编程中，单子比应用函子更强大。这是因为单子代码允许你检查单子值的内容并根据它进行分支。
+
+使用splat运算符的应用函子组合不允许计算的一部分检查另一部分的结果。在执行并行计算时，这一限制反而成为了优势。
+
+\section{单子实例}
+
+我们现在可以为用于副作用（side effects）的函子定义单子实例了。这将使我们能够组合副作用。
+
+\subsection{部分性}
+我们已经看到了使用Kleisli组合实现的\hask{Maybe}单子版本。以下是更常见的使用绑定（bind）的实现：
+\begin{haskell}
+instance Monad Maybe where
+  Nothing  >>= k = Nothing
+  (Just a) >>= k = k a
+\end{haskell}
+通常，\hask{pure}或\hask{return}在\hask{Applicative}实例中实现：
+\begin{haskell}
+  pure = Just
+\end{haskell}
+
+\subsection{日志记录}
+\hask{Writer}是对一个二元组的简单封装：
+\begin{haskell}
+newtype Writer w a = Writer { runWriter :: (a, w) }
+\end{haskell}
+
+为了组合生成日志的函数，我们需要一种使用\hask{Monoid}来组合单个日志条目的方法：
+\begin{haskell}
+instance Monoid w => Monad (Writer w) where
+  (Writer (a, w)) >>= k = let (Writer (b, w')) = k a
+                          in Writer (b, mappend w w')
+\end{haskell}
+\index{\hask{let}}\hask{let}子句不仅可以引入局部绑定，还可以进行模式匹配。
+
+\hask{pure}在\hask{Applicative}实例中实现：
+\begin{haskell}
+  pure a = Writer (a, mempty)
+\end{haskell}
+
+\subsection{环境}
+
+读取器单子（reader monad）是对从环境到返回类型的函数的简单封装：
+\begin{haskell}
+newtype Reader e a = Reader { runReader :: e -> a }
+\end{haskell}
+以下是\hask{Monad}实例：
+\begin{haskell}
+instance Monad (Reader e) where
+  ma >>= k = Reader (\e -> let a = runReader ma e
+                           in runReader (k a) e)
+\end{haskell}
+
+\hask{pure}在\hask{Applicative}实例中实现：
+\begin{haskell}
+  pure a = Reader (\e -> a)
+\end{haskell}
+读取器单子的绑定实现创建了一个以环境为参数的函数。这个环境被使用了两次，首先用于运行\hask{ma}以获取\hask{a}的值，然后用于评估\hask{k a}生成的值。
+
+\hask{pure}的实现忽略了环境。
+
+\begin{exercise}
+为以下数据类型定义\hask{Functor}和\hask{Monad}实例：
+\begin{haskell}
+newtype E e a = E { runE :: e -> Maybe a }
+\end{haskell}
+\end{exercise}
+
+\subsection{状态}
+与读取器类似，状态单子（state monad）是一个函数类型：
+\begin{haskell}
+newtype State s a = State { runState :: s -> (a, s) }
+\end{haskell}
+它的绑定实现类似，只是\hask{k}作用于\hask{a}的结果必须使用修改后的状态\hask{s'}来运行。
+\begin{haskell}
+instance Monad (State s) where
+  st >>= k = State (\s -> let (a, s') = runState st s
+                          in runState (k a) s')
+\end{haskell}
+\hask{pure}在\hask{Applicative}实例中实现：
+\begin{haskell}
+  pure a = State (\s -> (a, s))
+\end{haskell}
+
+将绑定应用于恒等函数（identity）可以得到\hask{join}的定义：
+\begin{haskell}
+join :: State s (State s a) -> State s a
+join mma = State (\s -> let (ma, s') = runState mma s
+                        in runState ma s')
+\end{haskell}
+注意，我们本质上是将第一个\hask{runState}的结果传递给第二个\hask{runState}，只是我们必须对第二个函数进行反柯里化（uncurry），以便它可以接受一个二元组：
+\begin{haskell}
+join mma = State (\s -> (uncurry runState) (runState mma s))
+\end{haskell}
+在这种形式下，很容易将其转换为无点表示法（point-free notation）：
+\begin{haskell}
+join mma = State (uncurry runState . runState mma)
+\end{haskell}
+
+有两个基本的Kleisli箭头（第一个概念上来自终端对象\hask{()}），我们可以用它们来构造任意的状态计算。第一个用于获取当前状态：
+\begin{haskell}
+get :: State s s
+get = State (\s -> (s, s))
+\end{haskell}
+第二个用于修改状态：
+\begin{haskell}
+set :: s -> State s ()
+set s = State (\_ -> ((), s))
+\end{haskell}
+许多单子都带有自己的预定义基本Kleisli箭头库。
+
+\subsection{非确定性}
+
+对于列表单子，让我们考虑如何实现\hask{join}。它必须将列表的列表转换为单个列表。这可以通过使用库函数\hask{concat}连接所有内部列表来实现。从那里，我们可以推导出绑定的实现。
+\begin{haskell}
+instance Monad [] where
+  as >>= k = concat (fmap k as)
+\end{haskell}
+\hask{pure}构造一个单例列表。（因此，非确定性的一个简单版本是确定性。）
+\begin{haskell}
+  pure a = [a]
+\end{haskell}
+
+命令式语言使用嵌套循环完成的事情，我们可以在Haskell中使用列表单子来完成。将绑定中的\hask{as}视为聚合内层循环运行的结果，而\hask{k}视为在外层循环中运行的代码。
+
+在许多方面，Haskell的列表更像命令式语言中所谓的\index{迭代器}\emph{迭代器}或\emph{生成器}。由于惰性求值，列表的元素很少同时存储在内存中，因此你可以将Haskell列表概念化为指向头部的指针以及一个将其向前推进到尾部的配方。或者你可以将列表视为一个协程，按需生成序列中的元素。
+
+\subsection{延续}
+
+延续单子（continuation monad）的绑定实现：
+\begin{haskell}
+newtype Cont r a = Cont { runCont :: (a -> r) -> r }
+\end{haskell}
+由于控制反转的固有特性——"不要调用我们，我们会调用你"的原则——需要一些逆向思维。
+
+绑定的结果是\hask{Cont r b}类型。要构造它，我们需要一个以延续\hask{k :: b -> r}为参数的函数：
+\begin{haskell}
+ma >>= fk = Cont (\k -> ...)
+\end{haskell}
+我们有两个可用的成分：
+\begin{haskell}
+ma :: Cont r a
+fk :: a -> Cont r b
+\end{haskell}
+我们想要运行\hask{ma}，为此我们需要一个接受\hask{a}的延续。
+\begin{haskell}
+runCont ma (\a -> ...)
+\end{haskell}
+在其中我们可以执行\hask{fk}。结果是\hask{Cont r b}类型，因此我们可以使用延续\hask{k :: b -> r}来运行它。
+\begin{haskell}
+runCont (fk a) k
+\end{haskell}
+
+综合起来，这个复杂的过程产生了以下实现：
+\begin{haskell}
+instance Monad (Cont r) where
+  ma >>= fk = Cont (\k -> runCont ma (\a -> runCont (fk a) k))
+\end{haskell}
+\hask{pure}来自\hask{Applicative}实例：
+\begin{haskell}
+  pure a = Cont (\k -> k a)
+\end{haskell}
+如前所述，组合延续不适合胆小的人。然而，它只需要实现一次——在延续单子的定义中。从那里开始，\hask{do}表示法将使其余部分相对容易。
+
+\subsection{输入/输出}
+
+\hask{IO}单子的实现是嵌入在语言中的。基本的I/O原语通过库提供。它们要么是Kleisli箭头的形式，要么是\hask{IO}对象（概念上是从终端对象\hask{()}出发的Kleisli箭头）。
+
+例如，以下对象包含从标准输入读取一行的命令：
+\begin{haskell}
+getLine :: IO String
+\end{haskell}
+没有办法从中提取字符串，因为它还不存在；但程序可以通过一系列进一步的Kleisli箭头来处理它。
+
+\hask{IO}单子是终极的拖延者：其Kleisli箭头的组合堆积了一个又一个任务，稍后由Haskell运行时执行。
+
+要输出一个字符串并换行，你可以使用这个Kleisli箭头：
+\begin{haskell}
+putStrLn :: String -> IO ()
+\end{haskell}
+将两者结合，你可以构造一个简单的\hask{main}对象：
+\begin{haskell}
+main :: IO ()
+main = getLine >>= putStrLn
+\end{haskell}
+它会回显你输入的字符串。
+
+与应用函子（applicative）不同，单子允许我们对中间值进行分支或模式匹配。在这个例子中，我们对\hask{IO}对象的内容进行分支（我们接下来会讨论\hask{do}表示法）：
+\begin{haskell}
+main :: IO ()
+main = do
+  s <- getLine
+  if s == "yes"
+  then putStrLn "Thank you!"
+  else putStrLn "Next time."
+\end{haskell}
+当然，实际的值检查会推迟到运行时对生成的\hask{IO}对象运行解释器时。
+
+\section{Do 表示法}
+
+值得再次强调的是，在编程中单子(monad)的唯一目的是让我们能够将一个大的Kleisli箭头分解成多个较小的Kleisli箭头。
+
+这可以通过两种方式实现：一种是直接使用无点(point-free)风格，通过Kleisli组合 \hask{<=<}；另一种是通过命名中间值，并使用 \hask{>>=} 将它们绑定到Kleisli箭头上。
+
+一些Kleisli箭头在库中定义，其他一些足够可重用，值得单独实现，但在实践中，大多数只是一次性的内联lambda表达式。
+
+这里有一个简单的例子：
+\begin{haskell}
+main :: IO ()
+main = 
+  getLine >>= \s1 ->
+    getLine >>= \s2 ->
+      putStrLn ("Hello " ++ s1 ++ " " ++ s2)
+\end{haskell}
+它使用了一个临时定义的Kleisli箭头，类型为 \hask{String->IO ()}，由lambda表达式定义：
+\begin{haskell}
+\s1 ->
+    getLine >>= \s2 ->
+      putStrLn ("Hello " ++ s1 ++ " " ++ s2)
+\end{haskell}
+这个lambda的主体进一步通过另一个临时定义的Kleisli箭头分解：
+\begin{haskell}
+\s2 -> putStrLn ("Hello " ++ s1 ++ " " ++ s2)
+\end{haskell}
+
+这种构造非常常见，因此有一种特殊的语法称为 \hask{do} 表示法，可以大大减少样板代码。例如，上述代码可以写成：
+\begin{haskell}
+main = do
+  s1 <- getLine
+  s2 <- getLine
+  putStrLn ("Hello " ++ s1 ++ " " ++ s2)
+\end{haskell}
+编译器会自动将其转换为一组嵌套的lambda表达式。行 \hask{ s1<-getLine } 通常读作：``\hask{s1} \emph{获取} \hask{getLine} 的结果。''
+
+这是另一个例子：一个使用列表单子生成两个列表中所有可能元素对的函数。
+\begin{haskell}
+pairs :: [a] -> [b] -> [(a, b)]
+pairs as bs = do
+  a <- as
+  b <- bs
+  pure (a, b)
+\end{haskell}
+注意，\hask{do} 块中的最后一行必须产生一个单子值——在这里这是通过 \hask{pure} 实现的。
+
+大多数命令式语言缺乏抽象能力来通用地定义单子，而是试图硬编码一些更常见的单子。例如，它们将异常实现为 \hask{Either} 单子的替代品，或将并发任务实现为延续单子的替代品。一些语言，如C++，引入了协程来模仿Haskell的 \hask{do} 表示法。
+
+\begin{exercise}
+实现：
+\begin{haskell}
+ap :: Monad m => m (a -> b) -> m a -> m b
+\end{haskell}
+使用 \hask{do} 表示法。
+\end{exercise}
+
+\begin{exercise}
+使用绑定操作符和lambda表达式重写 \hask{pairs} 函数。
+\end{exercise}
+
+\section{延续传递风格}
+
+我之前提到过，\hask{do} 语法糖使得使用延续（continuation）更加自然。延续最重要的应用之一是将程序转换为使用CPS（延续传递风格，Continuation Passing Style）。CPS转换在编译器构造中很常见。CPS的另一个非常重要的应用是将递归转换为迭代。
+
+深度递归程序的一个常见问题是它们可能会耗尽运行时栈。函数调用通常从将函数参数、局部变量和返回地址压入栈开始。因此，深度嵌套的递归调用可能会迅速耗尽（通常是固定大小的）运行时栈，导致运行时错误。这就是为什么命令式语言更喜欢循环而不是递归，以及为什么大多数程序员在学习递归之前先学习循环的主要原因。然而，即使在命令式语言中，当涉及到遍历递归数据结构（如链表或树）时，递归算法更加自然。
+
+使用循环的问题在于它们需要可变状态。通常会有某种计数器或指针在每次循环迭代时前进和检查。这就是为什么避免可变状态的纯函数式语言必须使用递归来代替循环。但由于循环更高效且不会消耗运行时栈，编译器会尝试将递归调用转换为循环。在Haskell中，所有尾递归函数都会被转换为循环。
+
+\subsection{尾递归与CPS}
+
+\index{尾递归}尾递归意味着递归调用发生在函数的最后。函数不会对尾调用的结果执行任何额外的操作。例如，以下程序不是尾递归的，因为它必须将 \hask{i} 加到递归调用的结果上：
+\begin{haskell}
+sum1 :: [Int] -> Int
+sum1 [] = 0
+sum1 (i : is) = i + sum1 is
+\end{haskell}
+相比之下，以下实现是尾递归的，因为对 \hask{go} 的递归调用的结果直接返回，没有进一步修改：
+\begin{haskell}
+sum2 = go 0 
+  where go n [] = n
+        go n (i : is) = go (n + i) is
+\end{haskell}
+编译器可以轻松地将后者转换为循环。它不会进行递归调用，而是将第一个参数 \hask{n} 的值覆盖为 \hask{n + i}，将指向列表头部的指针覆盖为指向其尾部的指针，然后跳转到函数的开头。
+
+但请注意，这并不意味着Haskell编译器无法巧妙地优化第一个实现。这只是意味着第二个实现（尾递归的）\emph{保证}会被转换为循环。
+
+事实上，通过执行CPS转换，总是可以将递归转换为尾递归。这是因为延续封装了\emph{剩余的计算}，所以它总是函数中的最后一个调用。
+
+为了了解它在实践中如何工作，考虑一个简单的树遍历。让我们定义一个在节点和叶子中都存储字符串的树：
+\begin{haskell}
+data Tree = Leaf String 
+          | Node Tree String Tree
+\end{haskell}
+为了连接所有这些字符串，我们使用先递归到左子树，然后递归到右子树的遍历：
+\begin{haskell}
+show :: Tree -> String
+show (Node lft s rgt) =
+  let ls = show lft
+      rs = show rgt
+  in ls ++ s ++ rs
+\end{haskell}
+这绝对不是一个尾递归函数，而且如何将其转换为尾递归并不明显。然而，我们可以几乎机械地使用延续单子重写它：
+\begin{haskell}
+showk :: Tree -> Cont r String
+showk (Leaf s) = pure s
+showk (Node lft s rgt) = do
+  ls <- showk lft
+  rs <- showk rgt
+  pure (ls ++ s ++ rs)
+ \end{haskell}
+然后我们可以使用平凡的延续 \hask{id} 运行结果函数：
+\begin{haskell}
+show :: Tree -> String
+show t = runCont (showk t) id
+\end{haskell}
+
+这个实现自动是尾递归的。我们可以通过去糖化 \hask{do} 语法清楚地看到这一点：
+\begin{haskell}
+showk :: Tree -> (String -> r) -> r
+showk (Leaf s) k = k s
+showk (Node lft s rgt) k =
+  showk lft (\ls -> 
+    showk rgt (\rs -> 
+      k (ls ++ s ++ rs)))
+\end{haskell}
+让我们分析这段代码。函数调用自身，传递左子树 \hask{lft} 和以下延续：
+\begin{haskell}
+\ls -> 
+    showk rgt (\rs -> 
+      k (ls ++ s ++ rs))
+\end{haskell}
+这个lambda又调用 \hask{showk}，传递右子树 \hask{rgt} 和另一个延续：
+\begin{haskell}
+\rs -> k (ls ++ s ++ rs)
+\end{haskell}
+这个最内层的lambda可以访问所有三个字符串：左、中和右。它将它们连接起来，并使用结果调用最外层的延续 \hask{k}。
+
+在每种情况下，对 \hask{showk} 的递归调用都是最后一个调用，其结果立即返回。此外，结果的类型是泛型 \hask{r}，这本身保证了我们无法对其执行任何操作，即使我们想这样做。
+
+当我们最终运行 \hask{showk} 的结果时，我们传递给它（针对 \hask{String} 类型实例化的）恒等函数：
+\begin{haskell}
+show :: Tree -> String
+show t = runCont' (showk t) id
+  where runCont' cont k = cont k
+\end{haskell}
+
+\subsection{使用命名函数}
+
+但假设我们的编程语言不支持匿名函数。是否可以用命名函数替换lambda？我们在讨论伴随函子定理时已经这样做过。我们注意到，延续单子生成的lambda是闭包——它们从环境中捕获了一些值。如果我们想用命名函数替换它们，我们必须显式传递环境。
+
+让我们用名为 \hask{next} 的函数调用替换第一个lambda，并以三元组 \hask{(s, rgt, k)} 的形式传递必要的环境：
+\begin{haskell}
+showk :: Tree -> (String -> r) -> r
+showk (Leaf s) k = k s
+showk (Node lft s rgt) k =
+  showk lft (next (s, rgt, k))
+\end{haskell}
+这三个值是树当前节点的字符串、右子树和外部延续。
+
+函数 \hask{next} 对 \hask{showk} 进行递归调用，传递右子树和名为 \hask{conc} 的命名延续：
+\begin{haskell}
+next :: (String, Tree, String -> r) -> String -> r
+next (s, rgt, k) ls = showk rgt (conc (ls, s, k))
+\end{haskell}
+同样，\hask{conc} 显式捕获包含两个字符串和外部延续的环境。它执行连接并使用结果调用外部延续：
+\begin{haskell}
+conc :: (String, String, String -> r) -> String -> r
+conc (ls, s, k) rs = k (ls ++ s ++ rs)
+\end{haskell}
+最后，我们定义平凡的恒等延续：
+\begin{haskell}
+done :: String -> String
+done s = s
+\end{haskell}
+我们用它来提取最终结果：
+\begin{haskell}
+show t = showk t done
+\end{haskell}
+
+\subsection{去函数化}
+
+延续传递风格需要使用高阶函数。如果这是一个问题，例如在实现分布式系统时，我们总是可以使用伴随函子定理来去函数化我们的程序。
+
+第一步是创建所有相关环境的总和，包括我们在 \hask{done} 中使用的空环境：
+\begin{haskell}
+data Kont = Done 
+          | Next String Tree Kont 
+          | Conc String String Kont
+\end{haskell}
+注意，这个递归数据结构可以重新解释为列表或栈。
+\begin{haskell}
+data Kont = Done | Cons Sum Kont
+\end{haskell}
+其中：
+\begin{haskell}
+data Sum = Next' String Tree  | Conc' String String 
+\end{haskell}
+这个列表是我们实现递归算法所需的运行时栈的版本。
+
+由于我们只关心生成字符串作为最终结果，我们将近似 \hask{String -> String} 函数类型。这是定义它的伴随的近似余单位（参见伴随函子定理）：
+\begin{haskell}
+apply :: (Kont, String) -> String
+apply (Done, s) = s
+apply (Next s rgt k, ls) = showk rgt (Conc ls s k)
+apply (Conc ls s k, rs) = apply (k, ls ++ s ++ rs)
+\end{haskell}
+
+现在，\hask{showk} 函数可以在不依赖高阶函数的情况下实现：
+\begin{haskell}
+showk :: Tree -> Kont -> String
+showk (Leaf s) k = apply (k, s)
+showk (Node lft s rgt) k = showk lft (Next s rgt k)
+\end{haskell}
+为了提取结果，我们使用 \hask{Done} 调用它：
+\begin{haskell}
+showTree t = showk t Done
+\end{haskell}
+
+\section{范畴论中的单子(Monad)}
+
+在范畴论中，单子最初产生于代数的研究。特别是，绑定运算符(bind operator)可以用来实现非常重要的替换操作。
+
+\subsection{替换}
+
+考虑这个简单的表达式类型。它由类型\hask{x}参数化，我们可以用这个类型来命名变量：
+\begin{haskell}
+data Ex x = Val Int 
+          | Var x 
+          | Plus (Ex x) (Ex x) 
+ deriving (Functor, Show)
+\end{haskell}
+例如，我们可以构造表达式$(2 + a) + b$：
+\begin{haskell}
+ex :: Ex Char
+ex = Plus (Plus (Val 2) (Var 'a')) (Var 'b')
+\end{haskell}
+我们可以为\hask{Ex}实现\hask{Monad}实例：
+\begin{haskell}
+instance Monad Ex where
+  Val n >>= k = Val n
+  Var x >>= k = k x
+  Plus e1 e2 >>= k = 
+    let x = e1 >>= k
+        y = e2 >>= k
+    in (Plus x y)
+\end{haskell}
+其中：
+\begin{haskell}
+  pure x = Var x 
+\end{haskell}
+
+现在假设你想通过将变量$a$替换为$x_1 + 2$，将$b$替换为$x_2$来进行替换（为简单起见，我们不考虑字母表中的其他字母）。这个替换由Kleisli箭头\hask{sub}表示：
+\begin{haskell}
+sub :: Char -> Ex String
+sub 'a' = Plus (Var "x1") (Val 2)
+sub 'b' = Var "x2"
+\end{haskell}
+如你所见，我们甚至能够将用于命名变量的类型从\hask{Char}更改为\hask{String}。
+
+当我们把这个Kleisli箭头绑定到\hask{ex}时：
+\begin{haskell}
+ex' :: Ex String
+ex' = ex >>= sub
+\end{haskell}
+我们得到了预期的树，对应于$(2 + (x_1 + 2)) + x_2$。
+
+\subsection{单子作为幺半群}
+
+让我们分析使用\hask{join}的单子定义：
+\begin{haskell}
+class Functor m => Monad m where
+  join :: m (m a) -> m a
+  pure :: a -> m a
+\end{haskell}
+我们有一个自函子\hask{m}和两个多态函数。
+
+在范畴论中，定义单子的函子传统上记为$T$（可能是因为单子最初被称为“三元组”）。这两个多态函数成为自然变换。第一个对应于\hask{join}，将$T$的“平方”（$T$与自身的复合）映射到$T$：
+\[ \mu \colon T \circ T \to T \]
+（当然，只有自函子才能以这种方式平方。）
+
+第二个对应于\hask{pure}，将恒等函子映射到$T$：
+\[ \eta \colon \text{Id} \to T \]
+
+将其与我们之前在幺半范畴中定义的幺半群进行比较：
+\begin{align*}
+\mu &\colon m \otimes m \to m \\
+\eta &\colon I \to m
+\end{align*}
+相似之处非常明显。这就是为什么我们经常将自然变换$\mu$称为单子乘法(monadic multiplication)。但在什么范畴中，函子的复合可以被视为张量积？
+
+进入自函子范畴。这个范畴中的对象是自函子，箭头是自然变换。
+
+但这个范畴还有更多的结构。我们知道任何两个自函子都可以复合。如果我们想把自函子视为对象，如何解释这种复合？一个操作将两个对象并产生第三个对象，看起来像张量积。张量积的唯一条件是它在两个参数上都是函子性的。也就是说，给定一对箭头：
+\begin{align*}
+ \alpha &\colon T \to T' \\
+ \beta &\colon S \to S' 
+\end{align*}
+我们可以将其提升到张量积的映射：
+\[ \alpha \otimes \beta \colon T \otimes S \to T' \otimes S' \]
+
+在自函子范畴中，箭头是自然变换，因此如果我们将$\otimes$替换为$\circ$，提升就是映射：
+\[ \alpha \circ \beta \colon T \circ T' \to S \circ S' \]
+但这只是自然变换的水平复合（现在你明白为什么它用圆圈表示）。
+
+这个幺半范畴中的单位对象是恒等自函子，单位律“严格”满足，即
+\[ \text{Id} \circ T = T = T \circ \text{Id}\]
+我们不需要任何单位子(unitor)。我们也不需要任何结合子(associator)，因为函子复合自动满足结合律。
+
+单位子和结合子都是恒等态射的幺半范畴称为\index{严格幺半范畴}\emph{严格}幺半范畴。
+
+然而，请注意，复合不是对称的，所以这不是一个对称幺半范畴。
+
+综上所述，单子是自函子幺半范畴中的幺半群。
+
+单子$(T, \eta, \mu)$由自函子范畴中的一个对象——即自函子$T$；和两个箭头——即自然变换组成：
+\begin{align*}
+ \eta &\colon \text{Id} \to T \\
+ \mu &\colon T \circ T \to T 
+\end{align*}
+要成为幺半群，这些箭头必须满足幺半律。以下是单位律（单位子被严格等式替换）：
+\[
+ \begin{tikzcd}
+\text{Id} \circ T
+ \arrow[rr, "\eta \circ T"]
+ \arrow[rrd, "="']
+& & T \circ T
+ \arrow[d, "\mu"]
+&& T \circ \text{Id}
+ \arrow[ll, "T \circ \eta"']
+ \arrow[lld, "="]
+ \\
+ && T
+  \end{tikzcd}
+\]
+这是结合律：
+\[
+ \begin{tikzcd}
+ (T \circ T) \circ T 
+ \arrow[rr, "="]
+ \arrow[d, "\mu \circ T"]
+ &&
+ T \circ (T \circ T)
+ \arrow[d, "T \circ \mu"]
+ \\
+ T \circ T 
+ \arrow[dr, "\mu"]
+& & T \circ T
+ \arrow[dl, "\mu"']
+ \\
+&  T
+ \end{tikzcd}
+\]
+我们使用了水平复合的whiskering表示法$\mu \circ T$和$T \circ \mu$。
+
+这些是用$\mu$和$\eta$表示的单子律。它们可以直接转换为\hask{join}和\hask{pure}的定律。它们也等价于由箭头$a \to T b$构建的Kleisli范畴的定律。
+
+\section{自由单子（Free Monads）}
+
+单子（monad）允许我们指定一系列可能产生副作用的操作。这样的序列既告诉计算机要做什么，也告诉它如何去做。但有时需要更大的灵活性：我们希望将“做什么”与“如何做”分离开来。自由单子（free monad）允许我们生成操作序列，而无需承诺使用特定的单子来执行它。这与定义自由幺半群（free monoid，即列表）类似，后者允许我们推迟选择应用于它的代数；或者与在编译为可执行代码之前创建抽象语法树（AST）类似。
+
+自由构造被定义为遗忘函子（forgetful functor）的左伴随。因此，我们首先需要定义“遗忘单子结构”的含义。由于单子是一个配备了额外结构的自函子（endofunctor），我们希望遗忘这个结构。我们取一个单子 $(T, \eta, \mu)$ 并只保留 $T$。但为了将这种映射定义为一个函子，我们首先需要定义单子的范畴。
+
+\subsection{单子的范畴}
+
+单子范畴 $\mathbf{Mon}(\cat C)$ 中的对象是单子 $(T, \eta, \mu)$。我们可以将两个单子 $(T, \eta, \mu)$ 和 $(T', \eta', \mu')$ 之间的箭头定义为两个自函子之间的自然变换：
+\[ \lambda \colon T \to T' \]
+然而，由于单子是带有结构的自函子，我们希望这些自然变换能够保持结构。单位元的保持意味着以下图表必须交换：
+\[
+ \begin{tikzcd}
+&\text{Id}
+ \arrow[ld, "\eta"']
+ \arrow[rd, "\eta'"]
+ \\
+ T
+ \arrow[rr, "\lambda"]
+ && T'
+ \end{tikzcd}
+\]
+乘法的保持意味着以下图表必须交换：
+\[
+ \begin{tikzcd}
+ T \circ T
+ \arrow[r, "\lambda \circ \lambda"]
+ \arrow[d, "\mu"]
+ & T' \circ T'
+ \arrow[d, "\mu'"]
+ \\
+ T
+ \arrow[r, "\lambda"]
+ & T'
+ \end{tikzcd}
+\]
+
+另一种看待 $\mathbf{Mon}(\cat C)$ 的方式是，它是幺半范畴 $([\cat C, \cat C], \circ, \text{Id})$ 中的幺半群范畴。
+
+\subsection{自由单子}
+
+现在我们有了单子的范畴，我们可以定义遗忘函子：
+\[ U \colon \mathbf{Mon}(\cat C) \to [\cat C, \cat C] \]
+它将每个三元组 $(T, \eta, \mu)$ 映射到 $T$，并将每个单子态射映射到底层的自然变换。
+
+我们希望自由单子由这个遗忘函子的左伴随生成。问题是这个左伴随并不总是存在。通常，这与大小问题有关：单子往往会“膨胀”事物。结论是，自由单子对某些自函子存在，但并非对所有自函子都存在。因此，我们不能通过伴随来定义自由单子。幸运的是，在大多数感兴趣的情况下，自由单子可以定义为代数的固定点。
+
+这种构造类似于我们如何将自由幺半群定义为列表函子的初始代数：
+\begin{haskell}
+data ListF a x = NilF | ConsF a x
+\end{haskell}
+或更一般的函子：
+\[ F_a x = I + a \otimes x \]
+在幺半范畴 $(\cat C, \otimes, I)$ 中。
+
+然而，这一次，单子被定义为幺半群的幺半范畴是自函子范畴 $([\cat C, \cat C], \circ, \text{Id})$。这个范畴中的自由幺半群是映射函子到函子的高阶“列表”函子的初始代数：
+\[ \Phi_F G = \text{Id} + F \circ G \]
+这里，两个函子的余积（coproduct）是逐点定义的。在对象上：
+\[ (F + G) a = F a + G a \]
+在箭头上：
+\[ (F + G) f = F f + G f \]
+（我们利用余积的函子性来形成两个态射的余积。我们假设 $\cat C$ 是余笛卡尔的，即所有余积都存在。）
+
+初始代数是这个算子的（最小）固定点，或递归方程的解：
+\[ L_F \cong \text{Id} + F \circ L_F \]
+这个公式建立了两个函子之间的自然同构。
+
+\subsection{Haskell 中的自由单子}
+
+在范畴论中，函子只是两个范畴之间的映射。在 Haskell 中，如果我们想实现比简单的 Haskell 自函子更高级的东西，我们必须引入一些新的类。Haskell 函子是一个类型构造器——即类型到类型的映射：
+\begin{haskell}
+f :: Type -> Type
+\end{haskell}
+以及 \hask{fmap} 的实现——即函数到函数的映射。
+
+一个高阶函子（higher order functor）将函子映射到函子。因此，它是一个类型构造器，接受一个类型构造器并生成另一个类型构造器：
+\begin{haskell}
+hf :: (Type -> Type) -> (Type -> Type)
+\end{haskell}
+它还必须将自然变换映射到自然变换。为了在 Haskell 中实现它，我们定义一个新的类型类：
+\begin{haskell}
+class HFunctor (hf :: (Type -> Type) -> Type -> Type) where
+   hmap :: (Functor f, Functor g) => 
+       Natural f g -> Natural (hf f) (hf g)
+\end{haskell}
+
+我们的高阶列表函子：
+\[ \Phi_F G = \text{Id} + F \circ G \]
+就是这样一个 \hask{HFunctor}，它还依赖于另一个类型构造器 \hask{f}。由于它是一个和类型，它将有两个构造器，对应于两个注入：
+\begin{haskell}
+data Phi f g a where
+   IdF :: a -> Phi f g a
+   CompF :: f (g a) -> Phi f g a
+\end{haskell}
+给定一个自然变换 \hask{alpha:: Nat g h}，它生成另一个自然变换 \hask{Nat (Phi f g) (Phi f h)}：
+\begin{haskell}
+instance Functor f => HFunctor (Phi f) where
+   hmap :: (Functor f, Functor g, Functor h) =>
+          Natural g h -> Natural (Phi f g) (Phi f h)
+   hmap alpha (IdF a) = IdF a
+   hmap alpha (CompF fga) = CompF (fmap alpha fga)
+\end{haskell}
+这只是余积的函子性和函子组合的应用。
+
+我们必须分别断言将 \hask{Phi f} 应用于函子 \hask{g} 的结果的函子性：
+\begin{haskell}
+instance (Functor f, Functor g) => Functor (Phi f g) where
+   fmap h (IdF a) = IdF (h a)
+   fmap h (CompF fga) = CompF (fmap (fmap h) fga)
+\end{haskell}
+
+生成自由单子的同构：
+\[ L_F \cong \text{Id} + F \circ L_F \]
+可以看作是一个递归数据类型的定义。从右到左，我们有自然变换，我们将其识别为初始代数的结构映射：
+\[\iota \colon \text{Id} + F \circ L_F \to L_F\]
+它是从和类型中映射出来的，因此它等价于一对自然变换：
+\begin{align*}
+\eta &\colon \text{Id} \to L_F
+\\
+\varphi &\colon F \circ L_F \to L_F
+\end{align*}
+
+当将其翻译到 Haskell 时，这些变换的组件成为两个构造器。它们定义了以下由函子 \hask{f} 参数化的递归数据类型：
+\begin{haskell}
+data FreeMonad f a where
+   Pure :: a -> FreeMonad f a
+   Free :: f (FreeMonad f a) -> FreeMonad f a
+\end{haskell}
+
+如果我们将函子 \hask{f} 视为值的容器，构造器 \hask{Free} 接受一个装满 \hask{(FreeMonad f a)} 的函子并将其存储起来。因此，类型为 \hask{FreeMonad f a} 的值是一棵树，其中每个节点都是一个装满分支的函子，每个叶子包含一个类型为 \hask{a} 的值。
+
+\hask{FreeMonad} 是一个高阶函子：
+\begin{haskell}
+instance HFunctor FreeMonad where
+   hmap :: (Functor f, Functor g) =>
+      Natural f g -> Natural (FreeMonad f) (FreeMonad g)
+   hmap _ (Pure a) = Pure a
+   hmap alpha (Free ffa) = Free (alpha (fmap (hmap alpha) ffa))
+\end{haskell}
+
+它的结果是一个 \hask{Functor}：
+\begin{haskell}
+instance Functor f => Functor (FreeMonad f) where
+  fmap g (Pure a) = Pure (g a)
+  fmap g (Free ffa) = Free (fmap (fmap g) ffa)
+\end{haskell}
+这里，外部的 \hask{fmap} 使用 \hask{f} 的 \hask{Functor} 实例，而内部的 \hask{fmap g} 递归到分支中。
+
+通过构造，\hask{FreeMonad} 是一个 \hask{Monad}。单子单位 \hask{eta} 只是恒等函子的薄封装：
+\begin{haskell}
+eta :: a -> FreeMonad f a
+eta a = Pure a
+\end{haskell}
+
+单子乘法，或 \hask{join}，是递归定义的：
+\begin{haskell}
+mu :: Functor f => FreeMonad f (FreeMonad f a) -> FreeMonad f a
+mu (Pure fa) = fa
+mu (Free ffa) = Free (fmap mu ffa)
+\end{haskell}
+
+因此，\hask{FreeMonad f} 的 \hask{Monad} 实例为：
+\begin{haskell}
+instance Functor f => Monad (FreeMonad f) where
+  m >>= k = mu (fmap k m)
+\end{haskell}
+其中：
+\begin{haskell}
+  pure a = eta a
+\end{haskell}
+
+我们也可以直接定义绑定：
+\begin{haskell}
+  (Pure a)   >>= k = k a
+  (Free ffa) >>= k = Free (fmap (>>= k) ffa)
+\end{haskell}
+
+自由单子将单子操作累积在树状结构中，而无需承诺任何特定的求值策略。这棵树可以使用代数进行“解释”。但这一次，它是在自函子范畴中的代数，因此它的载体是一个自函子 $G$，结构映射 $\alpha$ 是一个自然变换 $\Phi_F G \to G$：
+\[ \alpha \colon \text{Id} + F \circ G \to G\]
+这个自然变换，作为从和类型中映射出来的，等价于一对自然变换：
+\begin{align*}
+\lambda &\colon \text{Id} \to G
+\\
+\rho &\colon F \circ G \to G
+\end{align*}
+
+我们可以将其翻译为 Haskell 中的一对多态函数：
+\begin{haskell}
+type MAlg f g a = (a -> g a, f (g a) -> g a)
+\end{haskell}
+
+由于自由单子是初始代数，存在一个唯一的映射，即 catamorphism，从它到任何其他代数。回想我们如何为常规代数定义 catamorphism：
+\begin{haskell}
+cata :: Functor f => Algebra f a -> Fix f -> a
+cata alg = alg . fmap (cata alg) . out
+\end{haskell}
+
+类似的图表定义了自由单子的 catamorphism：
+\[
+ \begin{tikzcd}
+ \text{Id} + F \circ L_F
+ \arrow[rr, "{\text{hmap} (\text{mcata}\, \alpha)}"]
+ \arrow[d, "{\iota = \langle \eta, \varphi \rangle}"]
+ && \text{Id} + F \circ G
+\arrow[d, "{\alpha = \langle \lambda, \rho \rangle}"]
+ \\
+ L_F
+ \arrow[rr, dashed, "\text{mcata}\, \alpha"]
+ && G
+  \end{tikzcd}
+\]
+
+在 Haskell 中，我们通过对自由单子的两个构造器进行模式匹配来实现它（这对应于反转初始代数 $\iota$）。如果它是一个叶子，我们将 $\lambda$ 应用于它。如果它是一个节点，我们递归处理其内容，并将 $\rho$ 应用于结果：
+\begin{haskell}
+mcata :: Functor f => MAlg f g a -> FreeMonad f a -> g a
+mcata (l, r) (Pure a) = l a
+mcata (l, r) (Free ffa) = 
+  r (fmap (mcata (l, r)) ffa)
+\end{haskell}
+
+许多树状单子实际上是简单函子的自由单子。另一方面，列表单子不是自由的，因为它的 \hask{join} 不可逆地将列表压在一起。
+
+\begin{exercise}
+一个（非空）玫瑰树定义为：
+\begin{haskell}
+data Rose a = Leaf a | Rose [Rose a]
+  deriving Functor
+\end{haskell}
+实现 \hask{Rose a} 和 \hask{FreeMonad [] a} 之间的相互转换。
+\end{exercise}
+
+\begin{exercise}
+实现非空二叉树和 \hask{FreeMonad Bin a} 之间的转换，其中：
+\begin{haskell}
+data Bin a = Bin a a
+\end{haskell}
+\end{exercise}
+
+\subsection{栈计算器示例}
+
+作为一个例子，让我们考虑一个作为嵌入式领域特定语言（EDSL）实现的栈计算器。我们将使用自由单子来累积用这种语言编写的简单命令。
+
+命令由函子 \hask{StackF} 定义。将参数 \hask{k} 视为延续。
+\begin{haskell}
+data StackF k  = Push Int k
+               | Top (Int -> k)
+               | Pop k            
+               | Add k
+               deriving Functor
+\end{haskell}
+例如，\hask{Push} 应该将一个整数压入栈中，然后调用延续 \hask{k}。
+
+这个函子的自由单子可以被视为一棵树，大多数分支只有一个子节点，从而形成列表。例外是 \hask{Top} 节点，它有许多子节点，每个 \hask{Int} 值对应一个子节点。
+
+这是这个函子的自由单子：
+\begin{haskell}
+type FreeStack = FreeMonad StackF
+\end{haskell}
+
+为了创建领域特定的程序，我们将定义一些辅助函数。有一个通用的函数，它将一个装满值的函子提升为自由单子：
+\begin{haskell} 
+liftF :: (Functor f) => f r -> FreeMonad f r
+liftF fr = Free (fmap Pure fr)
+\end{haskell}
+我们还需要一系列“智能构造器”，它们是我们自由单子的 Kleisli 箭头：
+\begin{haskell}
+push :: Int -> FreeStack ()
+push n = liftF (Push n ())
+
+pop :: FreeStack ()
+pop = liftF (Pop ())
+
+top :: FreeStack Int
+top = liftF (Top id)
+
+add :: FreeStack ()
+add = liftF (Add ())
+\end{haskell}
+
+由于自由单子是一个单子，我们可以方便地使用 \hask{do} 表示法组合 Kleisli 箭头。例如，这里是一个将两个数字相加并返回它们的和的玩具程序：
+\begin{haskell}
+calc :: FreeStack Int
+calc = do
+  push 3
+  push 4
+  add
+  x <- top
+  pop
+  pure x
+\end{haskell}
+
+为了执行这个程序，我们需要定义一个代数，其载体是一个自函子。由于我们想实现一个基于栈的计算器，我们将使用状态函子的一个版本。它的状态是一个栈——一个整数列表。状态函子被定义为一个函数类型；这里它是一个接受一个列表并返回一个新列表与类型参数 \hask{k} 耦合的函数：
+\begin{haskell}
+newtype StackAction k = St ([Int] -> ([Int], k))
+  deriving Functor
+\end{haskell}
+
+为了运行这个动作，我们将函数应用于栈：
+\begin{haskell}
+runAction :: StackAction k -> [Int] -> ([Int], k)
+runAction (St act) ns = act ns
+\end{haskell}
+
+我们将代数定义为一对多态函数，对应于自由单子的两个构造器，\hask{Pure} 和 \hask{Free}：
+\begin{haskell}
+runAlg :: MAlg StackF StackAction a
+runAlg = (stop, go)
+\end{haskell}
+第一个函数终止程序的执行并返回一个值：
+\begin{haskell}
+stop :: a -> StackAction a
+stop a = St (\xs -> (xs, a))
+\end{haskell}
+第二个函数根据命令的类型进行模式匹配。每个命令都带有一个延续。这个延续必须在一个（可能被修改的）栈上运行。每个命令以不同的方式修改栈：
+\begin{haskell}
+go :: StackF (StackAction k) -> StackAction k
+go (Pop k)    = St (\ns -> runAction k (tail ns))
+go (Top ik)   = St (\ns -> runAction (ik (head ns)) ns)
+go (Push n k) = St (\ns -> runAction k (n: ns))
+go (Add k)    = St (\ns -> runAction k 
+                   ((head ns + head (tail ns)): tail (tail ns)))
+\end{haskell}
+例如，\hask{Pop} 丢弃栈顶。\hask{Top} 从栈顶取一个整数并使用它来选择要执行的分支。它通过将函数 \hask{ik} 应用于整数来实现。\hask{Add} 将栈顶的两个数字相加并压入结果。
+
+注意，我们定义的代数不涉及递归。将递归与操作分离是自由单子方法的一个优势。递归被一次性编码在 catamorphism 中。
+
+以下是可用于运行我们的玩具程序的函数：
+\begin{haskell}
+run :: FreeMonad StackF k -> ([Int], k)
+run prog = runAction (mcata runAlg prog) [] 
+\end{haskell}
+
+显然，使用部分函数 \hask{head} 和 \hask{tail} 使我们的解释器变得脆弱。一个格式错误的程序将导致运行时错误。一个更健壮的实现将使用允许错误传播的代数。
+
+使用自由单子的另一个优势是，相同的程序可以使用不同的代数进行解释。
+
+\begin{exercise}
+实现一个“漂亮打印机”，显示使用我们的自由单子构建的程序。提示：实现使用 \hask{Const} 函子作为载体的代数：
+\begin{haskell}
+showAlg :: MAlg StackF (Const String) a
+\end{haskell}
+\end{exercise}
+
+
+
+\end{document}

@@ -1,0 +1,591 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{3}
+
+\chapter{和类型(Sum Types)}
+
+\section{布尔类型(Bool)}
+
+我们已经知道如何组合箭头。但是如何组合对象呢？
+
+我们已经定义了$0$（初始对象）和$1$（终止对象）。那么$2$如果不是$1$加$1$，又是什么呢？
+
+一个$2$是一个具有两个元素的对象：两个从$1$出发的箭头。让我们称其中一个箭头为\hask{True}，另一个为\hask{False}。不要将这些名称与初始对象和终止对象的逻辑解释混淆。这两个是\emph{箭头}。
+
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[dd, bend right, "\text{True}"']
+ \arrow[dd, bend left, "\text{False}"]
+ \\
+ \\
+2
+ \end{tikzcd}
+\]
+
+这个简单的想法可以立即在Haskell\footnote{这种定义风格在Haskell中被称为广义代数数据类型(Generalized Algebraic Data Types)或\hask{GADTs}}中表达为一个类型的定义，传统上称为\hask{Bool}，以其发明者乔治·布尔(George Boole, 1815-1864)命名。
+
+\begin{haskell}
+data Bool where
+  True  :: () -> Bool
+  False :: () -> Bool
+\end{haskell}
+它对应于相同的图表（只是有一些Haskell的重命名）：
+\[
+ \begin{tikzcd}
+ \hask{()}
+ \arrow[dd, bend right, "\hask{True}"']
+ \arrow[dd, bend left, "\hask{False}"]
+ \\
+ \\
+\hask{Bool}
+ \end{tikzcd}
+\]
+
+正如我们之前所见，元素有一个简写符号，所以这里是一个更紧凑的版本：
+
+\begin{haskell}
+data Bool where
+  True  :: Bool
+  False :: Bool
+\end{haskell}
+
+我们现在可以定义一个类型为\hask{Bool}的项，例如
+\begin{haskell}
+x :: Bool
+x = True
+\end{haskell}
+第一行声明\hask{x}是\hask{Bool}的一个元素（实际上是一个函数\hask{()->Bool}），第二行告诉我们它是两个中的哪一个。
+
+我们在定义\hask{Bool}时使用的函数\hask{True}和\hask{False}被称为\index{数据构造器}\emph{数据构造器}。它们可以用来构造特定的项，如上面的例子。顺便说一下，在Haskell中，函数名以小写字母开头，除非它们是数据构造器。
+
+我们对类型\hask{Bool}的定义仍然不完整。我们知道如何构造一个\hask{Bool}项，但我们不知道如何处理它。我们必须能够定义从\hask{Bool}出发的箭头——\index{映射出}\emph{映射出} \hask{Bool}。
+
+第一个观察是，如果我们有一个从\hask{Bool}到某个具体类型\hask{A}的箭头\hask{h}，那么我们只需通过组合就可以自动得到两个从单位到\hask{A}的箭头\hask{x}和\hask{y}。以下两个（变形的）三角形是可交换的：
+
+\[
+ \begin{tikzcd}
+ \hask{()}
+ \arrow[dd, bend right, "\text{True}"']
+ \arrow[dd, bend left, "\text{False}"]
+  \arrow[ddd, bend right =90, "x"']
+ \arrow[ddd, bend left=90, "y"]
+\\
+ \\
+\text{Bool}
+\arrow[d, dashed, "h"]
+\\
+A
+ \end{tikzcd}
+\]
+换句话说，每个函数\hask{Bool->A}都会产生一对\hask{A}的元素。
+
+给定一个具体类型\hask{A}：
+\begin{haskell}
+h :: Bool -> A
+\end{haskell}
+我们有：
+\begin{haskell}
+x = h True
+y = h False
+\end{haskell}
+其中
+\begin{haskell}
+x :: A
+y :: A
+\end{haskell}
+注意使用简写符号表示函数对元素的应用：
+\begin{haskell}
+h True -- 意思是：h . True
+\end{haskell}
+
+我们现在准备通过添加一个条件来完成\hask{Bool}的定义，即任何从\hask{Bool}到\hask{A}的函数不仅产生而且\emph{等价于}一对\hask{A}的元素。换句话说，一对元素唯一地确定了一个从\hask{Bool}出发的函数。
+
+这意味着我们可以用两种方式解释上面的图表：给定\hask{h}，我们可以很容易地得到\hask{x}和\hask{y}。但反过来也是成立的：一对元素\hask{x}和\hask{y}唯一地\emph{定义}了\hask{h}。
+
+我们这里有一个双射在起作用。这次是一对元素$(x, y)$和一个箭头$h$之间的一一映射。
+
+在Haskell中，\hask{h}的这个定义封装在\index{\hask{if}语句}\hask{if}、\hask{then}、\hask{else}构造中。给定
+\begin{haskell}
+x :: A
+y :: A
+\end{haskell}
+我们定义映射出
+\begin{haskell}
+h :: Bool -> A
+h b = if b then x else y
+\end{haskell}
+这里，\hask{b}是类型\hask{Bool}的一个项。
+
+一般来说，数据类型使用\index{引入规则}\emph{引入}规则创建，并使用\index{消除规则}\emph{消除}规则解构。\hask{Bool}数据类型有两个引入规则，一个使用\hask{True}，另一个使用\hask{False}。\hask{if}、\hask{then}、\hask{else}构造定义了消除规则。
+
+给定上述\hask{h}的定义，我们可以检索用于定义它的两个项，这被称为\index{计算规则}\emph{计算}规则。它告诉我们如何计算\hask{h}的结果。如果我们用\hask{True}调用\hask{h}，结果是\hask{x}；如果我们用\hask{False}调用它，结果是\hask{y}。
+
+我们永远不应忘记编程的目的：将复杂问题分解为一系列更简单的问题。\hask{Bool}的定义说明了这个想法。每当我们必须构造一个从\hask{Bool}出发的映射时，我们将其分解为构造目标类型的一对元素的两个较小任务。我们将一个较大的问题换成了两个较简单的问题。
+
+\subsection{示例}
+
+让我们做一些例子。我们还没有定义很多类型，所以我们将仅限于从\hask{Bool}到\hask{Void}、\hask{()}或\hask{Bool}的映射。然而，这些边缘情况可能会为众所周知的结果提供新的见解。
+
+我们已经决定，除了恒等函数外，不能有以\hask{Void}为目标的函数，所以我们不期望有任何从\hask{Bool}到\hask{Void}的函数。确实，我们有零对\hask{Void}的元素。
+
+那么从\hask{Bool}到\hask{()}的函数呢？由于\hask{()}是终止的，所以只能有一个从\hask{Bool}到它的函数。确实，这个函数对应于从\hask{()}到\hask{()}的单一可能函数对——两者都是恒等函数。到目前为止，一切顺利。
+\[
+ \begin{tikzcd}
+ \hask{()}
+ \arrow[dd, bend right, "\text{True}"']
+ \arrow[dd, bend left, "\text{False}"]
+  \arrow[ddd, bend right =90, "\hask{id}"']
+ \arrow[ddd, bend left=90, "\hask{id}"]
+\\
+ \\
+\text{Bool}
+\arrow[d, dashed, "h"]
+\\
+\hask{()}
+ \end{tikzcd}
+\]
+
+有趣的情况是从\hask{Bool}到\hask{Bool}的函数。让我们将\hask{Bool}代入\hask{A}的位置：
+\[
+ \begin{tikzcd}
+ \hask{()}
+ \arrow[dd, bend right, "\text{True}"']
+ \arrow[dd, bend left, "\text{False}"]
+  \arrow[ddd, bend right =90, "x"']
+ \arrow[ddd, bend left=90, "y"]
+\\
+ \\
+\text{Bool}
+\arrow[d, dashed, "h"]
+\\
+\text{Bool}
+ \end{tikzcd}
+\]
+我们有多少对从\hask{()}到\hask{Bool}的函数$(x, y)$可供使用？只有两个这样的函数，\hask{True}和\hask{False}，所以我们可以形成四对。这些是$(True, True)$、$(False, False)$、$(True, False)$和$(False, True)$。因此，只能有四个从\hask{Bool}到\hask{Bool}的函数。
+
+我们可以使用\hask{if}、\hask{then}、\hask{else}构造在Haskell中编写它们。例如，最后一个，我们称之为\hask{not}，定义如下：
+\begin{haskell}
+not :: Bool -> Bool
+not b = if b then False else True
+\end{haskell}
+
+我们还可以将从\hask{Bool}到\hask{A}的函数视为箭头对象的元素，或指数对象$A^2$，其中$2$是\hask{Bool}对象。根据我们的计数，$0^2$中有零个元素，$1^2$中有一个元素，$2^2$中有四个元素。这正是我们从高中代数中所期望的，其中数字实际上意味着数字。
+
+\begin{exercise}
+编写其他三个函数\hask{Bool->Bool}的实现。
+\end{exercise}
+
+\section{枚举类型}
+
+在0、1、2之后是什么？一个具有三个数据构造子的对象。例如：
+\begin{haskell}
+data RGB where
+  Red   :: RGB
+  Green :: RGB
+  Blue  :: RGB
+\end{haskell}
+如果你厌倦了冗余的语法，这种定义有一个简写形式：
+
+\begin{haskell}
+data RGB = Red | Green | Blue
+\end{haskell}
+这个引入规则允许我们构造类型为\hask{RGB}的项，例如：
+\begin{haskell}
+c :: RGB
+c = Blue
+\end{haskell}
+为了定义从\hask{RGB}出发的映射，我们需要一个更一般的消去模式。就像从\hask{Bool}出发的函数由两个元素决定一样，从\hask{RGB}到\hask{A}的函数由\hask{A}的三个元素\hask{x}、\hask{y}和\hask{z}决定。我们使用\emph{模式匹配}语法来编写这样的函数：
+\begin{haskell}
+h :: RGB -> A
+h Red   = x
+h Green = y
+h Blue  = z
+\end{haskell}
+这只是一个函数，其定义被分成了三种情况。
+
+对于\hask{Bool}，也可以使用相同的语法来代替\hask{if}、\hask{then}、\hask{else}：
+\begin{haskell}
+h :: Bool -> A
+h True  = x
+h False = y
+\end{haskell}
+事实上，还有第三种方式可以使用\index{\hask{case}语句}\hask{case}语句来编写相同的内容：
+\begin{haskell}
+h c = case c of
+  Red   -> x
+  Green -> y
+  Blue  -> z
+\end{haskell}
+或者甚至
+\begin{haskell}
+h :: Bool -> A
+h b = case b of
+  True  -> x
+  False -> y
+\end{haskell}
+在编程时，你可以根据方便使用这些方式中的任何一种。
+
+这些模式也适用于具有四个、五个或更多数据构造子的类型。例如，一个十进制数字是以下之一：
+\begin{haskell}
+data Digit = Zero | One | Two | Three | ... | Nine
+\end{haskell}
+
+有一个巨大的Unicode字符枚举类型叫做\hask{Char}。它们的构造子有特殊的名称：你可以在两个单引号之间写入字符本身，例如：
+\begin{haskell}
+c :: Char
+c = 'a'
+\end{haskell}
+
+正如老子所说，万物的模式需要许多年才能完成，因此人们想出了通配符模式，即下划线，它可以匹配任何内容。
+
+因为模式是按顺序匹配的，你应该将通配符模式作为一系列模式中的最后一个：
+\begin{haskell}
+yesno :: Char -> Bool
+yesno c = case c of
+  'y' -> True
+  'Y' -> True
+  _   -> False
+\end{haskell}
+
+但我们为什么要止步于此呢？类型\hask{Int}可以被视为在$-2^{29}$到$2^{29}$之间（或更多，取决于实现）的整数枚举。当然，对这样的范围进行穷举模式匹配是不可能的，但原则仍然成立。
+
+在实践中，用于Unicode字符的\hask{Char}类型、用于固定精度整数的\hask{Int}类型、用于双精度浮点数的\hask{Double}类型以及其他几种类型，都是内置在语言中的。
+
+这些不是无限类型。它们的元素可以被枚举，即使这可能需要一万年。不过，类型\hask{Integer}是无限的。
+
+\section{和类型（Sum Types）}
+
+\hask{Bool} 类型可以被看作是 $2 = 1 + 1$ 的和。但没有什么能阻止我们用另一个类型替换 $1$，甚至用不同的类型替换每个 $1$。我们可以通过使用两个箭头来定义一个新的类型 $a + b$。我们称它们为 \hask{Left} 和 \hask{Right}。定义图是引入规则：
+\[
+ \begin{tikzcd}
+ a
+ \arrow[dr,  "\text{Left}"']
+ && b
+ \arrow[dl, "\text{Right}"]
+ \\
+&a + b
+ \end{tikzcd}
+\]
+在 Haskell 中，类型 $a + b$ 被称为 \hask{Either a b}。与 \hask{Bool} 类比，我们可以将其定义为
+\begin{haskell}
+data Either a b where
+  Left  :: a -> Either a b
+  Right :: b -> Either a b
+\end{haskell}
+（注意类型变量使用小写字母。）
+
+类似地，从 $a + b$ 到某个类型 $c$ 的映射由以下交换图确定：
+\[
+ \begin{tikzcd}
+ a
+ \arrow[dr,  bend left, "\text{Left}"']
+ \arrow[ddr, bend right, "f"']
+ && b
+ \arrow[dl, bend right, "\text{Right}"]
+ \arrow[ddl, bend left, "g"]
+ \\
+&a + b
+\arrow[d, dashed, "h"]
+\\
+& c
+ \end{tikzcd}
+\]
+给定一个函数 $h$，我们只需将其与 \hask{Left} 和 \hask{Right} 组合，就可以得到一对函数 $f$ 和 $g$。反过来，这样的一对函数唯一地确定了 $h$。这是消除规则。
+
+当我们将这个图转换为 Haskell 时，我们需要选择两个类型的元素。我们可以通过从终端对象定义箭头 $a$ 和 $b$ 来实现。
+\[
+ \begin{tikzcd}
+ &1
+ \arrow[ld, "a"']
+ \arrow[rd, "b"]
+ \\
+ a
+ \arrow[dr,  bend left, "\text{Left}"']
+ \arrow[ddr, bend right, "f"']
+ && b
+ \arrow[dl, bend right, "\text{Right}"]
+ \arrow[ddl, bend left, "g"]
+ \\
+&a + b
+\arrow[d, dashed, "h"]
+\\
+& c
+ \end{tikzcd}
+\]
+按照图中的箭头，我们得到：
+\[h \circ \text{Left} \circ a = f \circ a\]
+\[h \circ \text{Right} \circ b = g \circ b\]
+
+Haskell 语法几乎逐字重复了这些等式，从而产生了用于定义 \hask{h} 的模式匹配语法：
+
+\begin{haskell}
+h :: Either a b -> c
+h (Left  a) = f a
+h (Right b) = g b
+\end{haskell}
+（再次注意，类型变量使用小写字母，并且相同字母用于该类型的项。与人类不同，编译器不会因此感到困惑。）
+
+你也可以从右到左阅读这些等式，你会看到和类型的计算规则：用于定义 \hask{h} 的两个函数可以通过将 \hask{h} 应用于 \hask{(Left a)} 和 \hask{(Right b)} 来恢复。
+
+你也可以使用 \hask{case} 语法来定义 \hask{h}：
+\begin{haskell}
+h e = case e of
+  Left  a -> f a
+  Right b -> g b
+\end{haskell}
+
+那么数据类型的本质是什么？它不过是操作箭头的配方。
+
+\subsection{Maybe 类型}
+
+\hask{Maybe} 是一个非常有用的数据类型，它被定义为任何 $a$ 的和 $1 + a$。这是它在 Haskell 中的定义：
+\begin{haskell}
+data Maybe a where
+  Nothing :: () -> Maybe a
+  Just    ::  a -> Maybe a
+\end{haskell}
+数据构造函数 \hask{Nothing} 是从单元类型出发的箭头，而 \hask{Just} 从 \hask{a} 构造 \hask{Maybe a}。\hask{Maybe a} 与 \hask{Either () a} 同构。它也可以使用简写符号定义为
+\begin{haskell}
+data Maybe a = Nothing | Just a
+\end{haskell}
+
+\hask{Maybe} 主要用于编码部分函数的返回类型：这些函数在某些参数值下未定义。在这种情况下，这些函数不会失败，而是返回 \hask{Nothing}。在其他编程语言中，部分函数通常通过异常（或核心转储）来实现。
+
+\subsection{逻辑}
+
+在逻辑中，命题 $A + B$ 被称为\index{alternative}择一（alternative），或\emph{逻辑或}。你可以通过提供 $A$ 的证明或 $B$ 的证明来证明它。其中任何一个都足够。
+
+如果你想证明 $C$ 从 $A+B$ 得出，你必须为两种可能性做好准备：要么有人通过证明 $A$ 来证明 $A+B$（而 $B$ 可能为假），要么通过证明 $B$ 来证明 $A+B$（而 $A$ 可能为假）。在第一种情况下，你必须证明 $C$ 从 $A$ 得出。在第二种情况下，你需要一个证明 $C$ 从 $B$ 得出。这些正是 $A+B$ 消除规则中的箭头。
+
+\section{余积范畴}
+
+在Haskell中，我们可以使用\hask{Either}定义任意两种类型的和。一个范畴中如果所有和都存在，并且存在初始对象，则称为\emph{余积范畴}，而和称为\emph{余积}。你可能已经注意到，和类型模仿了数字的加法。事实证明，初始对象扮演了零的角色。
+
+\subsection{一加零}
+
+我们首先证明$1 + 0 \cong 1$，即终端对象与初始对象的和同构于终端对象。这类证明的标准方法是使用Yoneda技巧。由于和类型是通过映射来定义的，我们应该比较从两边\emph{出来}的箭头。
+
+Yoneda论证指出，如果两个对象到任意对象$a$的箭头集合之间存在双射$\beta_a$，并且这个双射是自然的，那么这两个对象是同构的。
+
+让我们看看$1 + 0$的定义及其到任意对象$a$的映射。这个映射由一对$(x, \mbox{!`})$定义，其中$x$是$a$的一个元素，$\mbox{!`}$是从初始对象到$a$的唯一箭头（在Haskell中是\hask{absurd}函数）。
+
+\[
+ \begin{tikzcd}
+ 1
+ \arrow[dr,  bend left, "\text{Left}"']
+ \arrow[ddr, bend right, "x"']
+ && 0
+ \arrow[dl, bend right, "\text{Right}"]
+ \arrow[ddl, bend left, "\mbox{!`}"]
+ \\
+&1 + 0
+\arrow[d, dashed, "h"]
+\\
+& a
+ \end{tikzcd}
+ \qquad
+ \begin{tikzcd}
+ 1
+ \arrow[dd, "x"]
+ \\
+ \\
+ a
+ \end{tikzcd}
+\]
+
+我们希望在$1+0$出发的箭头和$1$出发的箭头之间建立一一对应关系。箭头$h$由对$(x, \mbox{!`})$决定。由于只有一个$\mbox{!`}$，$h$和$x$之间存在双射。
+
+我们定义$\beta_a$将任何由对$(x, \mbox{!`})$定义的$h$映射到$x$。反过来，$\beta^{-1}_a$将$x$映射到对$(x, \mbox{!`})$。但它是一个自然变换吗？
+
+为了回答这个问题，我们需要考虑当我们从$a$转移到通过箭头$g \colon a \to b$与之相连的某个$b$时会发生什么。我们现在有两个选择：
+\begin{itemize}
+\item 通过后复合$g$使$h$切换焦点。我们得到一个新的对$(y = g \circ x, \mbox{!`})$。然后用$\beta_b$跟随它。
+\item 使用$\beta_a$将$(x, \mbox{!`})$映射到$x$。然后用后复合$(g \circ -)$跟随它。
+\end{itemize}
+在这两种情况下，我们得到相同的箭头$y = g \circ x$。因此，映射$\beta$是自然的。因此$1 + 0$同构于$1$。
+
+在Haskell中，我们可以定义形成同构的两个函数，但无法直接表达它们是彼此逆的事实。
+\begin{haskell}
+f :: Either () Void -> ()
+f (Left ()) = ()
+f (Right _) = ()
+
+f_1 :: () -> Either () Void
+f_1 _ = Left ()
+\end{haskell}
+函数定义中的下划线通配符表示参数被忽略。\hask{f}定义中的第二个子句是多余的，因为没有类型\hask{Void}的项。
+
+\subsection{某物加零}
+
+一个非常类似的论证可以用来证明$a + 0 \cong a$。下图解释了这一点。
+\[
+ \begin{tikzcd}
+ a
+ \arrow[dr,  bend left, "\text{Left}"']
+ \arrow[ddr, bend right, "f"']
+ && 0
+ \arrow[dl, bend right, "\text{Right}"]
+ \arrow[ddl, bend left, "\mbox{!`}"]
+ \\
+&a + 0
+\arrow[d, dashed, "h"]
+\\
+& x
+ \end{tikzcd}
+ \qquad
+ \begin{tikzcd}
+ a
+ \arrow[dd, "f"]
+ \\
+ \\
+ x
+ \end{tikzcd}
+\]
+
+我们可以通过实现一个（多态的）函数\hask{h}来将这个论证翻译到Haskell中，该函数适用于任何类型\hask{a}。
+
+\begin{exercise}
+在Haskell中实现形成\hask{(Either a Void)}和\hask{a}之间同构的两个函数。
+\end{exercise}
+
+我们可以使用类似的论证来证明$0 + a \cong a$，但和类型的一个更一般的性质使得这变得不必要。
+\subsection{交换性}
+
+在定义和类型的图中存在一个很好的左右对称性，这表明它满足交换律，$a + b \cong b + a$。
+
+让我们考虑从这个公式的两边映射出来。你可以很容易地看到，对于每一个由左边的对$(f, g)$决定的$h$，右边都有一个对应的$h'$由对$(g, f)$给出。这建立了箭头的双射。
+
+\[
+ \begin{tikzcd}
+ a
+ \arrow[dr,  bend left, "\text{Left}"']
+ \arrow[ddr, bend right, "f"']
+ && b
+ \arrow[dl, bend right, "\text{Right}"]
+ \arrow[ddl, bend left, "g"]
+ \\
+&a + b
+\arrow[d, dashed, "h"]
+\\
+& x
+ \end{tikzcd}
+ \qquad
+ \begin{tikzcd}
+ b
+ \arrow[dr,  bend left, "\text{Left}"']
+ \arrow[ddr, bend right, "g"']
+ && a
+ \arrow[dl, bend right, "\text{Right}"]
+ \arrow[ddl, bend left, "f"]
+ \\
+&b + a
+\arrow[d, dashed, "h'"]
+\\
+& x
+ \end{tikzcd}
+\]
+
+\begin{exercise}
+证明上述定义的双射是自然的。提示：$f$和$g$都通过后复合$k \colon x \to y$改变焦点。
+\end{exercise}
+\begin{exercise}
+在Haskell中实现见证\hask{(Either a b)}和\hask{(Either b a)}之间同构的函数。注意这个函数是它自己的逆。
+\end{exercise}
+
+\subsection{结合性}
+
+就像在算术中一样，我们定义的和是结合的：
+\[(a + b) + c \cong a + (b + c) \]
+很容易写出左边的映射：
+\begin{haskell}
+h :: Either (Either a b) c -> x
+h (Left (Left a))  = f1 a
+h (Left (Right b)) = f2 b
+h (Right c)        = f3 c
+\end{haskell}
+注意使用了嵌套模式如\hask{(Left (Left a))}等。映射完全由三个函数定义。同样的函数可以用来定义右边的映射：
+\begin{haskell}
+h' :: Either a (Either b c) -> x
+h' (Left a)          = f1 a
+h' (Right (Left b))  = f2 b
+h' (Right (Right c)) = f3 c
+\end{haskell}
+这建立了定义两个映射出的三函数之间的一一对应关系。这个映射是自然的，因为所有的焦点变化都是通过后复合完成的。因此，两边是同构的。
+
+这段代码也可以用图的形式展示。以下是同构左边的图：
+\[
+ \begin{tikzcd}
+ a
+ \arrow[rd, "L"']
+ \arrow[rrddd, bend right, red, "f_1"']
+ && b
+ \arrow[ld, "R"]
+ \arrow[ddd, bend left=60, red, "f_2"]
+&&c
+ \arrow[lldd, "R"]
+ \arrow[llddd, bend left, red, "f_3"]
+ \\
+ & a + b
+  \arrow[rd, "L"']
+ \\
+&&(a + b) + c
+ \arrow[d, dashed, "h"]
+\\
+&& x
+ \end{tikzcd}
+\]
+\subsection{函子性}
+由于和是通过映射出的性质定义的，很容易看出当我们改变焦点时会发生什么：它会“自然地”随着定义积的箭头的焦点变化。但当我们移动这些箭头的源时会发生什么？
+
+假设我们有箭头将$a$和$b$映射到某个$a'$和$b'$：
+\begin{align*}f &\colon a \to a' \\
+g &\colon b \to b' 
+\end{align*}
+这些箭头与构造函数$\text{Left}$和$\text{Right}$的复合可以用来定义和之间的映射：
+\[
+ \begin{tikzcd}
+ a
+ \arrow[d, "f"]
+ \arrow[dr,  bend left, "\text{Left}"']
+  && b
+ \arrow[d, "g"]
+ \arrow[dl, bend right, "\text{Right}"]
+ \\
+ a'
+ \arrow[rd, "\text{Left}"']
+&a + b
+\arrow[d, dashed, "h"]
+& b'
+\arrow[ld, "\text{Right}"]
+\\
+& a' + b'
+ \end{tikzcd}
+\]
+箭头对$(\text{Left} \circ f, \text{Right} \circ g)$唯一地定义了箭头$h \colon a + b \to a' + b'$。这个箭头的符号是：
+\[ a + b \xrightarrow{\langle f, g \rangle} a' + b' \]
+
+这种将一对箭头提升到和上的性质称为和的\emph{函子性}。你可以想象它允许你转换和\emph{内部}的两个对象并得到一个新的和。
+\begin{exercise}
+证明函子性保持复合。提示：取两个可复合的箭头，$g \colon b \to b'$和$g' \colon b' \to b''$，并证明应用$g' \circ g$与先应用$g$将$a + b$转换为$a + b'$，然后应用$g'$将$a + b'$转换为$a + b''$得到相同的结果。
+\end{exercise}
+
+\begin{exercise}
+证明函子性保持恒等。提示：使用$id_b$并证明它被映射到$id_{a+b}$。
+\end{exercise}
+
+\subsection{对称幺半群范畴}
+当一个孩子学习加法时，我们称之为算术。当一个成年人学习加法时，我们称之为余积范畴。
+
+无论我们是加数字、组合箭头，还是构造对象的和，我们都在重复将复杂事物分解为更简单组成部分的相同思想。
+
+正如老子所说，当事物结合在一起形成新事物，并且操作是结合的，并且它有一个中性元素时，我们就知道如何处理万物。
+
+我们定义的和类型满足以下性质：
+\begin{align*}
+a + 0 &\cong a \\
+a + b &\cong b + a \\
+(a + b) + c &\cong a + (b + c)
+\end{align*}
+并且它是函子的。具有这种操作类型的范畴称为\emph{对称幺半群范畴}。当操作是和（余积）时，它被称为\emph{余积范畴}。在下一章中，我们将看到另一种称为\emph{积范畴}的幺半群结构，没有“余”字。
+\end{document}

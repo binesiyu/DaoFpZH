@@ -1,0 +1,597 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{20}
+
+\chapter{富化}
+
+老子曰："知足者富。"
+
+\section{富化范畴}
+
+这可能会让人感到惊讶，但如果没有一些富化范畴的背景知识，就无法完全解释Haskell中\hask{Functor}的定义。在本章中，我将尝试展示，至少在概念上，富化并不是从普通范畴论迈出的一大步。
+
+研究富化范畴的额外动机来自于这样一个事实：许多文献，特别是nLab网站，以最一般的术语描述概念，这通常意味着以富化范畴的术语来描述。大多数常见的构造只需通过改变词汇来翻译，将hom-集替换为hom-对象，将$\Set$替换为幺半范畴$\cat V$。
+
+一些富化概念，如加权极限和余极限，本身非常强大，以至于人们可能会试图用"所有概念都是加权（余）极限"来取代Mac Lane的格言"所有概念都是Kan扩展"。
+
+\subsection{集合论基础}
+
+范畴论在其基础上非常节俭。但它（不情愿地）依赖于集合论。特别是hom-集的概念，定义为两个对象之间的箭头集合，将集合论作为范畴论的前提条件。诚然，箭头仅在\emph{局部小}范畴中形成一个集合，但考虑到处理太大而不能成为集合的事物需要更多的理论，这只是一个小小的安慰。
+
+如果范畴论能够自举，例如通过用更一般的对象替换hom-集，那将是非常好的。这正是富化范畴背后的思想。然而，这些hom-对象必须来自具有hom-集的某个其他范畴，并且在某些时候我们必须回到集合论的基础。尽管如此，能够用不同的东西替换无结构的hom-集，扩展了我们建模更复杂系统的能力。
+
+集合的主要属性是，与对象不同，它们不是原子的：它们有\emph{元素}。在范畴论中，我们有时会谈论\emph{广义元素}，它们只是指向一个对象的箭头；或者\emph{全局元素}，它们是从终端对象（有时是从幺半单位$I$）出发的箭头。但最重要的是，集合定义了\emph{元素的相等性}。
+
+几乎所有我们学到的关于范畴的知识都可以翻译到富化范畴的领域。然而，许多范畴推理涉及交换图，这些图表达了箭头的相等性。在富化设置中，我们没有在对象之间移动的箭头，因此所有这些构造都必须进行修改。
+
+\subsection{Hom-对象}
+
+乍一看，用对象替换hom-集似乎是一个倒退。毕竟，集合有元素，而对象是无形的斑点。然而，hom-对象的丰富性编码在它们所属范畴的态射中。从概念上讲，集合无结构意味着它们之间有许多态射（函数）。拥有更少的态射通常意味着拥有更多的结构。
+
+定义富化范畴的指导原则是，我们应该能够将普通范畴论作为一个特例恢复。毕竟，hom-集\emph{是}范畴$\Set$中的对象。事实上，我们非常努力地用函数而不是元素来表达集合的属性。
+
+话虽如此，用复合和单位定义范畴的定义涉及作为hom-集\emph{元素}的态射。因此，让我们首先在不使用元素的情况下重新表述范畴的基本概念。
+
+箭头的复合可以批量定义为hom-集之间的函数：
+\[ \circ \colon \mathcal C (b, c) \times \mathcal C (a, b) \to \mathcal C (a, c) \]
+
+我们可以使用从单例集出发的函数来讨论单位箭头：
+\[ j_a \colon 1 \to \mathcal C (a, a) \]
+
+这表明，如果我们想用某个范畴$\mathcal V$中的对象替换hom-集$\mathcal C (a, b)$，我们必须能够\emph{乘}这些对象来定义复合，并且我们需要某种\emph{单位对象}来定义单位。我们可以要求$\mathcal V$是笛卡尔的，但事实上，幺半范畴同样适用。正如我们将看到的，幺半范畴的单位和结合律直接转化为复合的单位和结合律。
+
+\subsection{富化范畴}
+
+设$\mathcal V$是一个具有张量积$\otimes$、单位对象$I$以及结合子和两个单位子（以及它们的逆）的幺半范畴：
+\begin{align*}
+\alpha &\colon (a \otimes b) \otimes c \to a \otimes (b \otimes c)
+\\
+ \lambda &\colon I \otimes a \to a
+ \\
+ \rho &\colon a \otimes I \to a
+\end{align*}
+一个在$\mathcal V$上富化的范畴$\mathcal C$具有对象，并且对于任何一对对象$a$和$b$，都有一个hom-对象$\mathcal C(a, b)$。这个hom-对象是$\mathcal V$中的一个对象。复合使用$\mathcal V$中的箭头定义：
+\[ \circ \colon \mathcal C (b, c) \otimes \mathcal C (a, b) \to \mathcal C (a, c) \]
+单位由箭头定义：
+\[ j_a \colon I \to \mathcal C (a, a) \]
+结合性用$\mathcal V$中的结合子表示：
+\[
+ \begin{tikzcd}
+ \big( \mathcal C (c, d) \otimes \mathcal C (b, c) \big) \otimes \mathcal C(a, b)
+ \arrow[rr, "\alpha"]
+ \arrow[d, "\circ \otimes id"]
+ &&  \mathcal C (c, d) \otimes \big( \mathcal C (b, c) \otimes \mathcal C(a, b) \big) 
+ \arrow[d, "id \otimes \circ"]
+ \\
+ \mathcal C(b, d) \otimes \mathcal C(a, b)
+ \arrow[dr, "\circ"]
+ && \mathcal C(c, d) \otimes \mathcal C(a, c)
+ \arrow[dl, "\circ"']
+ \\
+ & \mathcal C(a, d)
+ \end{tikzcd}
+\]
+单位律用$\mathcal V$中的单位子表示：
+
+\[
+ \begin{tikzcd}
+ I \otimes \mathcal C(a, b)
+ \arrow[r, "\lambda"]
+ \arrow[d, "j_b \otimes id"']
+ & \mathcal C(a, b)
+ \\
+ \mathcal C(b, b) \otimes \mathcal C(a, b)
+ \arrow[ru, "\circ"]
+ \end{tikzcd}
+ \qquad
+\begin{tikzcd}
+\mathcal C(a, b) \otimes I
+\arrow[r, "\rho"]
+\arrow[d, "id \otimes j_a"']
+& \mathcal C(a, b)
+\\
+\mathcal C(a, b) \otimes \mathcal C(a, a)
+\arrow[ru, "\circ"]
+ \end{tikzcd}
+\]
+注意，这些都是$\mathcal V$中的图，我们在其中确实有形成hom-集的箭头。我们仍然依赖于集合论，但在不同的层次上。
+
+在$\mathcal V$上富化的范畴也称为$\mathcal V$-范畴。在接下来的内容中，我们将假设富化范畴是\emph{对称}幺半的，因此我们可以形成对偶和积$\cat V$-范畴。
+
+$\mathcal V$-范畴$\mathcal C$的对偶范畴$\mathcal C^{op}$通过反转hom-对象获得，即：
+\[ \mathcal C^{op}(a, b) = \mathcal C(b, a) \]
+对偶范畴中的复合涉及反转hom-对象的顺序，因此只有在张量积是对称的情况下才有效。
+
+我们还可以定义$\cat V$-范畴的张量积；同样，前提是$\mathcal V$是对称的。两个$\mathcal V$-范畴$\mathcal C \otimes \mathcal D$的积的对象是来自每个范畴的对象对。这些对之间的hom-对象定义为张量积：
+\[ \mathcal (C \otimes \mathcal D) (\langle c, d \rangle, \langle c', d' \rangle) = \mathcal C(c, c') \otimes \mathcal D (d, d') \]
+我们需要张量积的对称性来定义复合。实际上，我们需要交换中间的两个hom-对象，然后才能应用两个可用的复合：
+\[ \circ \colon  \big(\mathcal C(c', c'',) \otimes \mathcal D (d', d'')\big) \otimes \big( \mathcal C(c, c') \otimes \mathcal D (d, d')\big) \to  \mathcal C(c, c'') \otimes \mathcal D (d, d'') \]
+单位箭头是两个单位的张量积：
+\[ I_{\mathcal C} \otimes I_{\mathcal D} \xrightarrow{j_c \otimes j_d} \mathcal C(c, c) \otimes \mathcal D (d, d) \]
+
+
+\begin{exercise}
+定义$\mathcal V$-范畴$\mathcal C^{op}$中的复合和单位。
+\end{exercise}
+
+\begin{exercise}
+证明每个$\mathcal V$-范畴$\mathcal C$都有一个底层的普通范畴$\mathcal C_0$，其对象相同，但其hom-集由hom-对象的（幺半全局）元素给出，即$\mathcal V(I, \mathcal C(a, b))$的元素。
+\end{exercise}
+
+\subsection{例子}
+
+从这个新的角度来看，我们迄今为止研究的普通范畴在幺半范畴$(\Set, \times, 1)$上是平凡富化的，其中笛卡尔积作为张量积，单例集作为单位。
+
+有趣的是，2-范畴可以被视为在$\mathbf{Cat}$上富化。实际上，2-范畴中的1-细胞本身就是另一个范畴中的对象。2-细胞只是该范畴中的箭头。特别是小范畴的2-范畴$\mathbf{Cat}$在自身中富化。其hom-对象是函子范畴，它们是$\mathbf{Cat}$中的对象。
+
+\subsection{预序}
+
+富化并不总是意味着添加更多的东西。有时它看起来更像是贫化，就像在行走箭头范畴上富化的情况。
+
+这个范畴只有两个对象，为了这个构造的目的，我们将其称为$\text{False}$和$\text{True}$。从$\text{False}$到$\text{True}$有一个单一的箭头（不包括单位箭头），这使得$\text{False}$成为初始对象，$\text{True}$成为终端对象。
+\[
+ \begin{tikzcd}
+ \text{False}
+ \arrow[r, "!"]
+ \arrow[loop, "id_{\text{False}}"']
+ & \text{True}
+ \arrow[loop, "id_{\text{True}}"']
+ \end{tikzcd}
+\]
+为了使其成为幺半范畴，我们定义张量积，使得：
+\[ \text{True} \otimes \text{True} = \text{True} \]
+所有其他组合都产生\text{False}。
+$\text{True}$是幺半单位，因为：
+\[ \text{True} \otimes x = x \]
+
+在幺半行走箭头上富化的范畴称为\emph{预序}。任何两个对象之间的hom-对象$\mathcal C (a, b)$可以是$\text{False}$或$\text{True}$。我们将$\text{True}$解释为$a$在预序中先于$b$，我们将其写为$a \le b$。$\text{False}$意味着这两个对象无关。
+
+由以下定义的复合的重要属性：
+\[ \mathcal C (b, c) \otimes \mathcal C (a, b) \to \mathcal C (a, c) \]
+是，如果左边的两个hom-对象都是$\text{True}$，那么右边也必须是$\text{True}$。（它不能是$\text{False}$，因为没有从$\text{True}$到$\text{False}$的箭头。）在预序解释中，这意味着$\le$是传递的：
+\[ b \le c \land a \le b \implies a \le c \]
+
+通过同样的推理，单位箭头的存在：
+\[ j_a \colon \text{True} \to \mathcal C(a, a) \]
+意味着$\mathcal C(a, a)$总是$\text{True}$。在预序解释中，这意味着$\le$是自反的，$a \le a$。
+
+注意，预序并不排除循环，特别是，可能有$a \le b$和$b \le a$而$a$不等于$b$。
+
+预序也可以在不使用富化的情况下定义为\index{薄范畴}\emph{薄范畴}——在任何两个对象之间最多有一个箭头的范畴。
+
+\subsection{自富化}
+
+任何笛卡尔闭范畴$\mathcal V$都可以被视为自富化的。这是因为每个外部hom-集$\mathcal C(a, b)$都可以被内部hom $b^a$（箭头对象）替换。
+
+事实上，每个\emph{幺半闭}范畴$\mathcal V$都是自富化的。回想一下，在幺半闭范畴中，我们有hom-函子伴随：
+\[ \mathcal V (a \otimes b, c) \cong \mathcal V (a, [b, c]) \]
+这个伴随的余单位作为评估态射：
+\[ \varepsilon_{b c} \colon [b, c] \otimes b \to c \]
+
+为了在这个自富化范畴中定义复合，我们需要一个箭头：
+\[ \circ \colon [b, c] \otimes [a, b] \to [a, c] \]
+诀窍是考虑整个hom-集并证明我们总能从中选择一个规范元素。我们从集合开始：
+\[ \mathcal V([b, c] \otimes [a, b], [a, c]) \]
+我们可以使用伴随将其重写为：
+\[  \mathcal V( ([b, c] \otimes [a, b]) \otimes a, c) \]
+我们现在要做的就是选择这个hom-集的一个元素。我们通过构造以下复合来实现：
+\[ ([b, c] \otimes [a, b]) \otimes a \xrightarrow{\alpha}  
+    [b, c] \otimes ([a, b] \otimes a) \xrightarrow{id \otimes \varepsilon_{a b} }
+    [b, c] \otimes b \xrightarrow{\varepsilon_{b c}} c \]
+我们使用了结合子和伴随的余单位。
+
+我们还需要一个定义单位的箭头：
+\[ j_a \colon I \to [a, a] \]
+同样，我们可以选择它作为hom-集$\mathcal V(I, [a, a])$的成员。我们使用伴随：
+\[ \mathcal V(I, [a, a]) \cong \mathcal V (I \otimes a, a) \]
+我们知道这个hom-集包含左单位子$\lambda$，所以我们可以用它来定义$j_a$。
+
+\section{$\mathcal V$-函子}
+
+普通函子将对象映射到对象，箭头映射到箭头。类似地，一个充实函子(enriched functor) $F$ 将对象映射到对象，但它不是作用于单个箭头，而是必须将同态对象(hom-object)映射到同态对象。这只有在源范畴 $\mathcal C$ 中的同态对象与目标范畴 $\mathcal D$ 中的同态对象属于同一范畴时才可能。换句话说，两个范畴必须在相同的 $\mathcal V$ 上充实。然后，$F$ 在同态对象上的作用使用 $\mathcal V$ 中的箭头定义：
+\[ F_{a b} \colon \mathcal C (a, b) \to \cat D (F a, F b) \]
+为了清晰起见，我们在 $F$ 的下标中指定对象对。
+
+函子必须保持复合和恒等。这些可以用 $\mathcal V$ 中的交换图表示：
+
+\[
+ \begin{tikzcd}
+ \mathcal C(b, c) \otimes \mathcal C(a, b) 
+ \arrow[r, "\circ"]
+ \arrow[d, "F_{b c} \otimes F_{a b}"]
+ & \mathcal C(a, c)
+ \arrow[d, "F_{a c}"]
+ \\
+ \mathcal D(F b, F c) \otimes \mathcal D (F a, F b)
+ \arrow[r, "\circ"]
+ & \mathcal D(F a, F b)
+ \end{tikzcd}
+ \qquad
+ \begin{tikzcd}
+ & I
+ \arrow[dl, "j_a"']
+ \arrow[dr, "j_{F a}"]
+ \\
+ \mathcal C(a, a)
+ \arrow[rr, "F_{a a}"]
+ && \mathcal D( F a, F a)
+  \end{tikzcd}
+\]
+注意，我使用了相同的符号 $\circ$ 表示两种不同的复合，以及相同的 $j$ 表示两种不同的恒等映射。它们的含义可以从上下文中推导出来。
+
+如前所述，所有图表都在范畴 $\mathcal V$ 中。
+
+\subsection{\text{Hom}-函子}
+
+在一个在幺半闭范畴(monoidal closed category) $\mathcal V$ 上充实的范畴中，hom-函子是一个充实函子：
+\[ \text{Hom}_{\cat C} \colon \mathcal C^{op} \otimes \mathcal C \to \mathcal V \]
+在这里，为了定义一个充实函子，我们必须将 $\mathcal V$ 视为自充实的。
+
+这个函子在（对象对）上的作用很清楚：
+\[ \text{Hom}_{\cat C} \langle a, b \rangle = \mathcal C (a, b) \]
+
+为了定义一个充实函子，我们必须定义 $\text{Hom}$ 在同态对象上的作用。这里，源范畴是 $\mathcal C^{op} \otimes \mathcal C$，目标范畴是 $\cat V$，两者都在 $\cat V$ 上充实。让我们考虑从 $\langle a, a' \rangle$ 到 $\langle b, b' \rangle$ 的同态对象。hom-函子在这个同态对象上的作用是 $\cat V$ 中的一个箭头：
+\[ \text{Hom}_{\langle a, a' \rangle \langle b, b' \rangle} \colon (C^{op} \otimes \mathcal C)(\langle a, a' \rangle, \langle b, b' \rangle) \to \mathcal V (\text{Hom}\langle a, a' \rangle, \text{Hom}\langle b, b' \rangle)\]
+根据积范畴的定义，源是两个同态对象的张量积。目标是 $\mathcal V$ 中的内部同态。因此，我们寻找一个箭头：
+\[ \mathcal C(b, a) \otimes \mathcal C(a', b') \to [\mathcal C(a, a'), \mathcal C(b, b')] \]
+我们可以使用柯里化(Currying)的hom-函子伴随关系来解包内部同态：
+\[ \Big( \mathcal C(b, a) \otimes \mathcal C(a', b') \Big) \otimes \mathcal C(a, a') \to \mathcal C(b, b') \]
+我们可以通过重新排列积并应用两次复合来构造这个箭头。
+
+在充实设置中，我们最接近定义从 $a$ 到 $b$ 的单个态射的方法是使用单位对象的一个箭头。我们将同态对象的（幺半全局）元素定义为 $\cat V$ 中的一个态射：
+\[ f \colon I \to \mathcal C(a, b) \]
+我们可以定义使用hom-函子提升这样的箭头意味着什么。例如，保持第一个参数不变，我们定义：
+\[ \mathcal C(c, f) \colon \mathcal C(c, a) \to C(c, b) \] 
+作为复合：
+\[ \mathcal C(c, a) \xrightarrow{\lambda^{-1}} I \otimes \mathcal C(c, a) \xrightarrow{f \otimes id} \mathcal C(a, b) \otimes \mathcal C(c, a) \xrightarrow{\circ} \mathcal C(c, b) \]
+类似地，$f$ 的反变提升：
+\[ \mathcal C(f, c) \colon \mathcal C(b, c) \to \mathcal C(a, c) \]
+可以定义为：
+\[ \mathcal C(b, c) \xrightarrow{\rho^{-1}} \mathcal C(b, c) \otimes I \xrightarrow{id \otimes f} \mathcal C (b, c) \otimes \mathcal C(a, b) \xrightarrow{\circ} \mathcal C(a, c) \]
+
+我们在普通范畴论中研究的许多熟悉构造都有其充实对应物，其中积被张量积取代，$\Set$ 被 $\mathcal V$ 取代。
+
+\begin{exercise}
+两个预序之间的函子是什么？
+\end{exercise}
+
+\subsection{充实共预层}
+共预层(co-presheaves)，即 $\Set$-值函子，在范畴论中扮演着重要角色，因此很自然地会问它们在充实设置中的对应物是什么。共预层的推广是一个 $\cat V$-函子 $\cat C \to \cat V$。这只有在 $\cat V$ 可以成为一个 $\cat V$-范畴时才有可能，即当它是幺半闭的。
+
+一个充实共预层将 $\cat C$ 的对象映射到 $\cat V$ 的对象，并将 $\cat C$ 的同态对象映射到 $\cat V$ 的内部同态：
+\[ F_{a b} \colon \mathcal C (a, b) \to \cat [F a, F b] \]
+
+特别是，$\text{Hom}$-函子是 $\cat V$-值 $\cat V$-函子的一个例子：
+\[ \text{Hom} \colon \cat C^{op} \otimes \cat C \to \cat V \]
+
+hom-函子是充实profunctor的一个特例，其定义为：
+\[ \mathcal C^{op} \otimes \mathcal D \to \mathcal V \]
+
+\begin{exercise}
+张量积是 $\cat V$ 中的一个函子：
+\[ \otimes \colon \cat V \times \cat V \to \cat V \]
+证明如果 $\cat V$ 是幺半闭的，张量积定义了一个 $\cat V$-函子。提示：定义它在内部同态上的作用。
+\end{exercise}
+
+\subsection{函子强度与充实}
+
+当我们讨论单子(monad)时，我提到了使它们在编程中工作的重要属性。定义单子的自函子必须是强的，以便我们可以在单子代码中访问外部上下文。
+
+事实证明，我们在Haskell中定义自函子的方式使它们自动成为强的。原因是强度与充实有关，正如我们所看到的，笛卡尔闭范畴是自充实的。让我们从一些定义开始。
+
+在幺半范畴中，自函子 $F$ 的函子强度定义为具有分量的自然变换：
+\[ \sigma_{a b} \colon a \otimes F(b) \to F (a \otimes b) \]
+有一些非常明显的相干条件使强度尊重张量积的性质。这是结合性条件：
+\[
+ \begin{tikzcd}
+ (a \otimes b) \otimes F (c) 
+ \arrow[rr, "\sigma_{(a \otimes b) c}"]
+ \arrow[d, "\alpha"]
+ && F((a \otimes b) \otimes c)
+ \arrow[d, "F(\alpha)"]
+ \\
+ a \otimes (b \otimes F(c))
+ \arrow[r, "a \otimes \sigma_{b c}"]
+ & a \otimes F(b \otimes c)
+ \arrow[r, "\sigma_{a (b \otimes c)}"]
+ & F(a \otimes (b \otimes c))
+ \\
+ \end{tikzcd}
+\]
+这是单位条件：
+\[
+ \begin{tikzcd}
+ I \otimes F(a)
+ \arrow[r, "\sigma_{I a}"]
+ \arrow[rd, "\lambda"]
+ & F(I \otimes a)
+ \arrow[d, "F (\lambda)"]
+ \\
+ & F(a)
+ \end{tikzcd}
+\]
+
+在一般幺半范畴中，这称为\emph{左强度}，并且有相应的右强度定义。在对称幺半范畴中，两者是等价的。
+
+一个充实自函子将同态对象映射到同态对象：
+\[ F_{a b} \colon \cat C (a, b) \to \cat C (F a, F b) \]
+如果我们将幺半闭范畴 $\cat V$ 视为自充实的，同态对象是内部同态，因此一个充实自函子配备了映射：
+\[ F_{a b} \colon [a, b] \to [F a, F b] \]
+将其与我们在Haskell中定义的 \hask{Functor} 进行比较：
+\begin{haskell}
+class Functor f where
+  fmap :: (a -> b) -> (f a -> f b)
+\end{haskell}
+此定义中涉及的函数类型，\hask{(a -> b)} 和 \hask{(f a -> f b)}，是\emph{内部}同态。因此，Haskell 的 \hask{Functor} 确实是一个充实函子。
+
+在Haskell中，我们通常不区分外部和内部同态，因为它们的元素集是同构的。这是柯里化伴随关系的简单结果：
+\[ \cat C(1 \times b, c) \cong \cat C(1, [b, c]) \]
+以及终端对象是笛卡尔积的单位的事实。
+
+事实证明，在自充实范畴 $\cat V$ 中，每个强自函子都是自动充实的。确实，为了证明函子 $F$ 是充实的，我们需要定义内部同态之间的映射，即同态集的一个元素：
+\[ F_{a b} \in \cat V([a, b], [F a, F b]) \]
+使用同态伴随关系，这与以下同构：
+\[ \cat V([a, b] \otimes F a, F b) \]
+我们可以通过组合强度和伴随关系的余单位（求值态射）来构造这个映射：
+\[ [a, b] \otimes F a \xrightarrow{\sigma_{[a, b] a}} F ([a, b] \otimes a) \xrightarrow{F \epsilon_{a b}} F b \]
+
+相反，$\cat V$ 中的每个充实自函子都是强的。为了证明强度，我们需要定义映射 $\sigma_{a b}$，或者等价地（通过同态伴随关系）：
+\[ a \to [F b, F (a \otimes b)] \]
+回忆同态伴随关系的单位定义，即余求值态射：
+\[ \eta_{a b} \colon a \to [b, a \otimes b] \]
+我们构造以下复合：
+\[ a \xrightarrow{\eta_{a b}} [b, a \otimes b] \xrightarrow{F_{b, a \otimes b}} [F b, F (a \otimes b)] \]
+
+这可以直接翻译到Haskell：
+\begin{haskell}
+strength :: Functor f => (a, f b) -> f (a, b)
+strength = uncurry (\a -> fmap (coeval a))
+\end{haskell}
+其中 \hask{coeval} 的定义如下：
+\begin{haskell}
+coeval :: a -> (b -> (a, b))
+coeval a = \b -> (a, b)
+\end{haskell}
+由于柯里化和求值内置于Haskell中，我们可以进一步简化这个公式：
+\begin{haskell}
+strength :: Functor f => (a, f b) -> f (a, b)
+strength (a, bs) = fmap (a, ) bs
+\end{haskell}
+
+\section{$\mathcal V$-自然变换}
+
+两个函子$F$和$G$从$\mathcal C$到$\mathcal D$之间的普通自然变换是从同态集$\mathcal D(F a, G a)$中选择箭头。在富集（enriched）设置中，我们没有箭头，所以我们可以使用单位对象$I$来进行选择。我们定义$\cat V$-自然变换在$a$处的分量为一个箭头：
+\[ \nu_a \colon I \to \mathcal D(F a, G a) \]
+
+自然性条件有些复杂。标准的自然性方块涉及任意箭头$f \colon a \to b$的提升以及以下组合的等式：
+\[ \nu_b \circ F f = G f \circ \nu_a \]
+
+让我们考虑这个方程中涉及的同态集。我们正在提升一个态射$f \in \mathcal C(a, b)$。方程两边的组合是$\mathcal D(F a, G b)$的元素。
+
+在左边，我们有箭头$ \nu_b \circ F f$。组合本身是两个同态集乘积的映射：
+\[  \mathcal D(F b, G b) \times \mathcal D(F a, F b) \to \mathcal D(F a, G b) \]
+类似地，在右边我们有$G f \circ \nu_a$，这是一个组合：
+\[ \mathcal D(G a, G b) \times \mathcal D(F a, G a) \to  \mathcal D(F a, G b) \]
+
+在富集设置中，我们必须使用同态对象而不是同态集，并且自然变换的分量选择是使用单位$I$完成的。我们总是可以使用左或右单位的逆来产生单位。
+
+总的来说，自然性条件表示为以下交换图：
+\[
+ \begin{tikzcd}
+ & I \otimes \mathcal C(a, b)
+ \arrow[r, "\nu_b \otimes F_{a b}"]
+ & \mathcal D(F b, G b) \otimes \mathcal D(F a, F b)
+ \arrow[dr, "\circ"]
+ \\
+ \mathcal C(a, b)
+ \arrow[ur, "\lambda^{-1}"]
+\arrow[dr, "\rho^{-1}"']
+ &&& \mathcal D(F a, G b)
+ \\
+ & \mathcal C(a, b) \otimes I 
+ \arrow[r, "G_{a b} \otimes \nu_a"]
+ & \mathcal D(G a, G b) \otimes \mathcal D(F a, G a)
+ \arrow[ur, "\circ"']
+  \end{tikzcd}
+\]
+这也适用于普通范畴，我们可以通过首先从$\cat C(a, b)$中选择一个$f$来追踪这个图中的两条路径。然后我们可以使用$\nu_b$和$\nu_a$来选择自然变换的分量。我们还使用$F$或$G$来提升$f$。最后，我们使用组合来重现自然性方程。
+
+如果我们使用我们之前定义的同态函子对同态对象的全局元素的作用，这个图可以进一步简化。自然变换的分量被定义为这样的全局元素：
+\[ \nu_a \colon I \to \mathcal D(F a, G a) \]
+我们有两个这样的提升：
+\[ \mathcal D(d, \nu_b) \colon \mathcal D(d, F b) \to \mathcal D(d, G b) \]
+和：
+\[ \mathcal D (\nu_a, d) \colon \mathcal D(G a, d) \to \mathcal D(F a, d) \]
+我们得到的东西看起来更像熟悉的自然性方块：
+\[
+ \begin{tikzcd}
+ & \mathcal D(F a, F b)
+  \arrow[dr, "{\mathcal D (F a, \nu_b)}"]
+ \\
+ \mathcal C(a, b) 
+ \arrow[ur, "F_{a b}"]
+ \arrow[dr, "G_{a b}"']
+ && \mathcal D(F a, G b)
+ \\
+& \mathcal D (G a, G b)
+\arrow[ur, "{\mathcal D (\nu_a, G b)}"']
+ \end{tikzcd}
+\]
+
+两个$\mathcal V$-函子$F$和$G$之间的$\mathcal V$-自然变换形成一个集合，我们称之为$\mathcal V\text{-nat} (F, G)$。
+
+之前我们已经看到，在普通范畴中，自然变换的集合可以写为一个端（end）：
+\[ [\mathcal C, \mathcal D](F, G) \cong \int_a \mathcal D(F a, G a) \]
+事实证明，端和余端（coend）可以定义为富集profunctors，所以这个公式也适用于富集自然变换。不同的是，它不是自然变换的集合$\mathcal V\text{-nat} (F, G)$，而是定义了$\mathcal V$中自然变换的对象$[\mathcal C, \mathcal D](F, G)$。
+
+$\cat V$-profunctor $P \colon \cat C \otimes \cat C^{op} \to \cat V$的（余）端的定义与我们看到的普通profunctors的定义类似。例如，端是$\cat V$中的一个对象$e$，配备了一个超自然变换$\pi \colon e \to P$，它在这些对象中是普遍的。
+
+\section{Yoneda引理}
+
+普通的Yoneda引理涉及一个$\Set$-值函子$F$和一组自然变换：
+\[ [\mathcal C, \Set]( \mathcal C(c, -), F) \cong F c \]
+为了将其推广到充实（enriched）设置中，我们将考虑一个$\mathcal V$-值函子$F$。如前所述，我们将利用$\mathcal V$可以自充实的事实，只要它是闭的，因此我们可以讨论$\mathcal V$-值的$\mathcal V$-函子。
+
+Yoneda引理的弱版本处理的是$\mathcal V$-自然变换的\emph{集合}。因此，我们必须将右侧也转换为一个集合。这是通过取$F c$的（幺半群-全局）元素来实现的。我们得到：
+\[ \mathcal V\text{-nat} ( \mathcal C(c, -), F) \cong \mathcal V(I, F c) \]
+
+Yoneda引理的强版本则处理$\mathcal V$的对象，并使用$\mathcal V$中内部hom的端（end）来表示自然变换的对象：
+\[ \int_x [\mathcal C( c, x), F x] \cong F c \]
+
+\section{加权极限}
+
+极限（和余极限）是建立在交换三角形的基础上的，因此它们不能直接转换到充实（enriched）环境中。问题在于锥体是由“导线”构建的，即单个态射。你可以将hom集想象为一束粗导线，每根导线的厚度为零。在构建锥体时，你从给定的hom集中选择一根导线。我们必须用更粗的东西来替换这些导线。
+
+考虑一个图表，即从索引范畴$\mathcal J$到目标范畴$\mathcal C$的函子$D$。以$x$为顶点的锥体的导线是从hom集$\mathcal C(x, D j)$中选择的，其中$j$是$\mathcal J$的一个对象。
+
+\[
+ \begin{tikzcd}
+ \\
+ \\
+j
+\arrow[rr, red]
+\arrow[rd, red]
+&& k
+\arrow[dl, red]
+\\
+& l
+ \end{tikzcd}
+ \qquad
+ \begin{tikzcd}
+  & x
+ \arrow[ddl, ""']
+ \arrow[ddl, bend right, "{\mathcal C(x, D j)}"']
+ \arrow[ddl, bend left, ""]
+ \\
+\\
+D j
+\arrow[rr, red]
+\arrow[rd, red]
+&& D k
+\arrow[dl, red]
+\\
+& D l
+ \end{tikzcd}
+ \]
+选择第$j$根导线可以描述为从单元素集$1$出发的函数：
+\[ \gamma_j \colon 1 \to \mathcal C(x, D j) \]
+我们可以尝试将这些函数收集成一个自然变换：
+\[ \gamma \colon \Delta_1 \to \mathcal C(x, D -) \]
+其中$\Delta_1$是一个常函子，它将$\mathcal J$的所有对象映射到单元素集。自然性条件确保了构成锥体侧面的三角形是交换的。
+
+所有以$x$为顶点的锥体的集合由自然变换的集合给出：
+\[ [\mathcal J, \Set] (\Delta_1, \mathcal C(x, D-)) \]
+
+这种重新表述使我们更接近充实环境，因为它用hom集而不是单个态射来重新表述问题。我们可以首先考虑$\mathcal J$和$\mathcal C$都在$\mathcal V$上充实，在这种情况下，$D$将是一个$\mathcal V$-函子。
+
+只有一个问题：如何定义一个常$\mathcal V$-函子$\Delta_x \colon \cat C \to \cat D$？它对对象的作用是显而易见的：它将$\cat C$中的所有对象映射到$\cat D$中的一个对象$x$。但它对hom对象应该做什么？
+
+普通的常函子$\Delta_x$将$\cat C(a, b)$中的所有态射映射到$id_x \in \cat D(x, x)$中的恒等态射。然而，在充实环境中，$\cat D(x, x)$是一个没有内部结构的对象。即使它恰好是单位$I$，也不能保证对于每个hom对象$\mathcal C(a, b)$，我们都能找到一个到$I$的箭头；即使存在一个，它也可能不是唯一的。换句话说，没有理由相信$I$是终端对象。
+
+解决方案是“涂抹奇点”：与其使用常函子选择一根导线，我们应该使用其他“加权”函子$W \colon \mathcal J\to \Set$来选择hom集内更粗的“圆柱体”。这种以$x$为顶点的加权锥体是自然变换集合中的一个元素：
+\[ [\mathcal J, \Set] \left(W, \mathcal C(x, D-)\right) \]
+
+\emph{加权极限}，也称为\index{索引极限}\emph{索引极限}，$\text{lim}^W D$，然后被定义为普遍的加权锥体。这意味着对于任何以$x$为顶点的加权锥体，存在一个从$x$到$\text{lim}^W D$的唯一态射，将其分解。分解由定义加权极限的同构的自然性保证：
+\[  \mathcal C(x, \text{lim}^W D) \cong [\mathcal J, \Set] (W, \mathcal C(x, D-)) \]
+
+通常的非加权极限通常被称为\index{锥形极限}\emph{锥形}极限，它对应于使用常函子作为权重。
+
+这个定义几乎可以逐字翻译到充实环境中，只需将$\Set$替换为$\mathcal V$：
+\[  \mathcal C(x, \text{lim}^W D) \cong [\mathcal J, \mathcal V] (W, \mathcal C(x, D-)) \]
+当然，这个公式中符号的含义发生了变化。两边现在都是$\mathcal V$中的对象。左边是$\mathcal C$中的hom对象，右边是两个$\mathcal V$-函子之间的自然变换对象。
+
+对偶地，加权余极限由自然同构定义：
+\[  \mathcal C(\text{colim}^W D, x) \cong [\mathcal J^{op}, \mathcal V] (W, \mathcal C(D-, x)) \]
+这里，余极限由从对偶范畴$\mathcal J^{op} \to \mathcal V$的函子$W$加权。
+
+加权（余）极限，无论是在普通范畴还是在充实范畴中，都起着基础性的作用：它们可以用来重新表述许多熟悉的构造，如（余）端、Kan扩展等。
+
+\section{作为加权极限的端}
+
+端与积，或者更一般地说，与极限有许多共同之处。如果你仔细观察，投影 $\pi_x \colon e \to P \langle a, a \rangle$ 构成了一个锥的边；只不过我们不再有交换三角形，而是有楔形。事实证明，我们可以将端表示为加权极限。这种表述的优势在于它在富化（enriched）环境中同样适用。
+
+我们已经看到，$\cat V$ 值的 $\cat V$-profunctor 的端可以使用更基本的概念——超自然变换（extranatural transformation）来定义。这反过来又使我们能够定义自然变换的\emph{对象}，从而能够定义加权极限。现在我们可以继续扩展端的定义，使其适用于更一般的混合变异的 $\cat V$-函子，其值在 $\cat V$-范畴 $\cat D$ 中：
+\[ P \colon \mathcal C^{op} \otimes \mathcal C \to \mathcal D \]
+我们将使用这个函子作为 $\cat D$ 中的图。
+
+此时，数学家们开始担心大小问题。毕竟，我们将整个范畴——平方后——作为一个单一的图嵌入到 $\cat D$ 中。为了避免大小问题，我们假设 $\cat C$ 是小的；也就是说，它的对象形成一个集合。
+
+我们希望取由 $P$ 定义的图的加权极限。权重必须是一个 $\mathcal V$-函子 $\mathcal C^{op} \otimes \mathcal C \to \cat V$。有一个这样的函子总是可用的，即 hom-函子 $\text{Hom}_{\cat C}$。我们将使用它来将端定义为加权极限：
+\[  \int_c P\langle c, c\rangle = \text{lim}^{\text{Hom}} P\]
+
+首先，让我们确信这个公式在普通的（$\Set$-富化）范畴中有效。由于端是由它们的映射性质定义的，让我们考虑从任意对象 $d$ 到加权极限的映射，并使用标准的 Yoneda 技巧来展示同构。根据定义，我们有：
+\[ \cat D(d, \text{lim}^{\text{Hom}} P) \cong [\cat C^{op} \times \cat C, \Set](\cat C(-, =), \cat D (d, P(-, =))\]
+我们可以将自然变换的集合重写为对象对 $\langle c, c' \rangle$ 上的端：
+\[ \int_{\langle c, c' \rangle} \Set(\cat C(c, c'), \cat D (d, P\langle c, c' \rangle)) \]
+使用 Fubini 定理，这等价于迭代端：
+\[\int_c \int_{c'} \Set(\cat C(c, c'), \cat D(d, P\langle c, c' \rangle))\]
+我们现在可以应用 ninja-Yoneda 引理来对 $c'$ 进行积分。结果是：
+\[ \int_c \cat D(d, P\langle c, c \rangle) \cong \cat D(d, \int_c P \langle c, c \rangle) \]
+其中我们使用连续性将端推到 hom-函子下。由于 $d$ 是任意的，我们得出结论，对于普通范畴：
+\[ \text{lim}^{\text{Hom}} P \cong  \int_c P\langle c, c\rangle \]
+这证明了我们在富化情况下使用加权极限来定义端的合理性。
+
+类似的公式适用于余端，只不过我们使用相反范畴 $\text{Hom}_{\cat C^{op}}$ 中的 hom-函子作为权重的余极限：
+\[  \int^c P\langle c, c\rangle = \text{colim}^{\text{Hom}_{\cat C^{op}}} P\]
+
+\begin{exercise}
+证明对于普通的 $\Set$-富化范畴，余端的加权余极限定义再现了之前的定义。提示：使用余端的映射性质。
+\end{exercise}
+
+\begin{exercise}
+证明，只要两边都存在，以下恒等式在普通的（$\Set$-富化）范畴中成立（它们可以推广到富化环境中）：
+\[ \text{lim}^W D \cong \int_{j \colon \cat J} W j \pitchfork D j \]
+\[ \text{colim}^W D \cong \int^{j \colon \cat J} W j \cdot D j \]
+提示：使用映射性质与 Yoneda 技巧以及幂和余幂的定义。
+\end{exercise}
+
+\section{Kan 扩展}
+
+我们已经看到了如何使用从单点范畴 $1$ 出发的函子将极限和余极限表示为 Kan 扩展。加权极限让我们摆脱了单点性，而权重的明智选择使我们能够用加权极限来表达 Kan 扩展。
+
+首先，让我们推导出普通 $\Set$-富范畴的公式。右 Kan 扩展定义为：
+\[ (\text{Ran}_P F) e \cong \int_c \cat B (e, P c) \pitchfork F c \]
+我们将考虑从任意对象 $d$ 到它的映射。推导过程遵循几个简单的步骤，主要是通过展开定义。
+
+我们从：
+\[ \cat D\big(d, (\text{Ran}_P F) e\big) \]
+开始，并代入 Kan 扩展的定义：
+\[ \cat D\big(d, \int_c \cat B (e, P c) \pitchfork F c\big) \]
+利用 hom-函子的连续性，我们可以将 end 提取出来：
+\[ \int_c \cat D\big(d,  \cat B (e, P c) \pitchfork F c\big) \]
+然后我们使用 pitchfork 的定义：
+\[ \cat D (d, A \pitchfork d') \cong \Set  \big(A, \cat D(d, d')\big) \]
+得到：
+\[ \int_c \cat D\big(d,  \cat B (e, P c) \pitchfork F c\big) \cong \int_c \Set\big( \cat B(e, P c), \cat D(d, F c)\big)\]
+这可以写为一组自然变换：
+\[ [\cat C, \Set] \big(\cat B(e, P-), \cat D(d, F-)\big) \]
+加权极限也是通过自然变换的集合定义的：
+\[  \mathcal D(d, \text{lim}^W F) \cong [\mathcal C, \Set] \big(W, \mathcal D(d, F-)\big) \]
+这引导我们得到最终结果：
+\[ \cat D(d, \text{lim}^{\cat B (e, P-)} F) \]
+由于 $d$ 是任意的，我们可以使用 Yoneda 技巧得出结论：
+\[ (\text{Ran}_P F) e = \text{lim}^{\cat B(e, P-)} F  \]
+这个公式成为富范畴设置中右 Kan 扩展的定义。
+
+类似地，左 Kan 扩展可以定义为加权余极限：
+\[ (\text{Lan}_P F) e = \text{colim}^{\cat B(P-, e)} F \]
+
+\begin{exercise}
+推导普通范畴中左 Kan 扩展的公式。
+\end{exercise}
+
+\section{常用公式}
+\begin{itemize}
+\item 米田引理（Yoneda lemma）：
+\[ \int_x [\mathcal C( c, x), F x] \cong F c \]
+\item 加权极限（Weighted limit）：
+\[  \mathcal C(x, \text{lim}^W D) \cong [\mathcal J, \mathcal V] \big(W, \mathcal C(x, D-)\big) \]
+\item 加权余极限（Weighted colimit）：
+\[  \mathcal C(\text{colim}^W D, x) \cong [\mathcal J^{op}, \mathcal V] \big(W, \mathcal C(D-, x)\big) \]
+\item 右Kan延拓（Right Kan extension）：
+\[ (\text{Ran}_P F) e = \text{lim}^{\cat B(e, P-)} F  \]
+\item 左Kan延拓（Left Kan extension）：
+\[ (\text{Lan}_P F) e = \text{colim}^{\cat B(P-, e)} F \]
+\end{itemize}
+
+\end{document}

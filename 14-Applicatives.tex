@@ -1,0 +1,534 @@
+\documentclass[DaoFP]{subfiles}
+\begin{document}
+\setcounter{chapter}{13}
+
+\chapter{应用函子(Applicative Functors)}
+
+老子会说："如果你并行执行两件事，所需时间将减半。"
+
+\section{并行组合}
+
+当我们将范畴论的语言翻译成编程语言时，我们将箭头视为计算。但计算需要时间，这引入了一个新的时间维度。这反映在我们使用的语言中。例如，两个箭头的组合结果 $g \circ f$，通常被读作 $g$ \emph{在} $f$ \emph{之后}。$g$ 的执行必须 \emph{跟随} $f$ 的执行，因为我们需要 $f$ 的结果才能调用 $g$。我们称之为 \index{sequential composition}\emph{顺序组合}。它反映了计算之间的依赖关系。
+
+然而，有些计算至少原则上可以并行执行，因为它们之间没有依赖关系。这只有在并行计算的结果可以组合时才有意义，这意味着我们需要在幺半群范畴中工作。因此，并行组合的基本构建块是两个箭头的张量积，$f \colon x \to a$ 和 $g \colon y \to b$：
+\[ x \otimes y \xrightarrow{f \otimes g} a \otimes b \]
+在笛卡尔范畴中，我们通常使用笛卡尔积作为张量。在编程中，我们只需运行两个函数，然后组合它们的结果。
+
+\subsection{幺半群函子}
+
+当我们尝试组合\emph{有副作用}的计算结果时，问题就出现了。为此，我们需要一种方法来组合一对结果 \hask{f a} 和 \hask{f b} 以及它们的副作用，以生成单个结果 \hask{f (a, b)}。当然，每种类型的副作用需要不同的处理方式。
+
+让我们以部分性(partiality)副作用为例。我们可以使用以下方式组合两个这样的副作用：
+\begin{haskell}
+combine :: Maybe a -> Maybe b -> Maybe (a, b)
+combine (Just a) (Just b) = Just (a, b)
+combine _ _ = Nothing
+\end{haskell}
+只有当两个计算都成功时，结果才是成功的。
+
+一个计算还应该能够产生一个"忽略我"的结果。这将是一个返回单位值（即相对于笛卡尔积的单位）和"忽略我"副作用的计算。注意，返回 \hask{Nothing} 是不行的，因为它会使另一个计算的结果无效。正确的实现是：
+\begin{haskell}
+ignoreMe :: Maybe ()
+ignoreMe = Just ()
+\end{haskell}
+当与任何其他部分计算 \hask{combine}'d 时，它会被忽略（符合左/右单位律）。
+
+一般来说，如果类型构造器 \hask{f} 是 \hask{Monoidal} 类的实例，它就支持并行组合：
+\begin{haskell}
+class Monoidal f where
+  unit  :: f ()
+  (>*<) :: f a -> f b -> f (a, b)
+\end{haskell}
+特别是，\hask{Maybe} 函子是 \hask{Monoidal} 的：
+\begin{haskell}
+instance Monoidal Maybe where
+  unit  = Just ()
+  Just a >*< Just b = Just (a, b)
+  _ >*< _ = Nothing
+\end{haskell}
+幺半群函子必须与笛卡尔范畴的幺半群结构兼容，因此它们应满足明显的单位和结合律。
+
+\subsection{应用函子}
+
+尽管 \hask{Monoidal} 类为副作用的并行组合提供了足够的支持，但它并不十分实用。
+
+首先，我们需要能够对组合结果进行操作，因此我们需要 \hask{f} 的 \hask{Functor} 实例。这让我们可以将类型为 \hask{(a, b)->c } 的函数应用于有副作用的对 \hask{f(a, b)}，而不影响副作用。
+
+一旦我们知道如何并行运行两个计算，我们就可以利用结合律来组合任意数量的计算。例如：
+\begin{haskell}
+run3 :: (Functor f, Monoidal f) => 
+  (x -> f a) -> (y -> f b) -> (z -> f c) -> 
+  (x, y, z) -> f (a, b, c)
+run3 f1 f2 f3 (x, y, z) =
+  let fab  = f1 x >*< f2 y
+      fabc = fab >*< f3 z
+  in fmap reassoc fabc
+\end{haskell}
+其中我们重新关联结果的三元组：
+\begin{haskell}
+reassoc :: ((a, b), c) -> (a, b, c)
+reassoc ((a, b), c) = (a, b, c)
+\end{haskell}
+\index{\hask{let}}\hask{let} 子句用于引入局部绑定。在这里，局部变量 \hask{fab} 和 \hask{fabc} 被初始化为相应的幺半群积。\hask{let}/\hask{in} 构造是一个表达式，其值由 \hask{in} 子句的内容给出。
+
+但随着计算数量的增加，事情变得越来越笨拙。
+
+幸运的是，有一种更符合人体工程学的方法。在大多数应用中，并行计算的结果被输入到一个函数中，该函数在生成最终结果之前收集它们。我们需要的是提升这种多参数函数的方法——这是 \hask{Functor} 执行的单参数函数提升的推广。
+
+例如，要组合两个并行计算的结果，我们可以使用函数：
+\begin{haskell}
+liftA2 :: (a -> b -> c) -> f a -> f b -> f c
+\end{haskell}
+不幸的是，我们需要无限多个这样的函数，以适应所有可能的参数数量。诀窍是用一个利用柯里化的函数来替换它们。
+
+一个有两个参数的函数是一个返回函数的单参数函数。因此，假设 \hask{f} 是一个函子，我们可以先 \hask{fmap}'ping：
+\begin{haskell}
+a -> (b -> c)
+\end{haskell}
+在第一个参数 \hask{(f a)} 上得到：
+\begin{haskell}
+f (b -> c)
+\end{haskell}
+现在我们需要将 \hask{f (b -> c)} 应用于第二个参数 \hask{(f b)}。如果函子是 \hask{Monoidal}，我们可以使用操作符 \hask{>*< } 将两者组合，得到类型为：
+\begin{haskell}
+f (b -> c, b)
+\end{haskell}
+然后我们可以 \hask{fmap} 函数应用 \hask{apply} 到它上面：
+\begin{haskell}
+fmap apply (ff >*< fa)
+\end{haskell}
+其中：
+\begin{haskell}
+apply :: (a -> b, a) -> b
+apply (f, a) = f a
+\end{haskell}
+
+或者，我们可以定义中缀操作符 \hask{<*>}，它让我们在组合副作用的同时将函数应用于参数：
+\begin{haskell}
+(<*>) :: f (a -> b) -> f a -> f b
+fs <*> as = fmap apply (fs >*< as)
+\end{haskell}
+这个操作符有时被称为 \index{\hask{<*>}}\index{splat}``splat''。
+
+相反，我们可以用 splat 来实现幺半群操作符：
+\begin{haskell}
+fa >*< fb = fmap (,) fa <*> fb
+\end{haskell}
+其中我们使用了对构造器 \hask{(,)} 作为双参数函数。
+
+使用 \hask{<*>} 而不是 \hask{>*<} 的优势在于，它让我们可以通过重复剥离柯里化层次来应用任意数量参数的函数。
+
+例如，我们可以将三个参数的函数 \hask{g :: a -> b -> c -> d } 应用于三个值 \hask{fa :: f a }, \hask{fb :: f b }, 和 \hask{fc :: f c }，使用：
+\begin{haskell}
+fmap g fa <*> fb <*> fc
+\end{haskell}
+我们甚至可以使用 \hask{fmap} 的中缀版本 \index{\hask{<$>}}\hask{<$>} 使其看起来更像函数应用：
+\begin{haskell}
+g <$> fa <*> fb <*> fc
+\end{haskell}
+其中：
+\begin{haskell}
+(<$>) :: Functor f => (a -> b) -> f a -> f b
+(<$>) = fmap
+\end{haskell}
+这两个操作符都向左绑定，因此我们可以将此符号视为函数应用的直接推广：
+\begin{haskell}
+g a b c
+\end{haskell}
+除了它还累积了三个计算的副作用。
+
+为了完善这个图景，我们还需要定义应用一个有副作用的零参数函数的含义。它只是意味着在一个单一值上附加一个"忽略我"的副作用。我们可以使用幺半群的 \hask{unit} 来实现这一点：
+\begin{haskell}
+pure :: a -> f a
+pure a = fmap (const a) unit
+\end{haskell}
+相反，\hask{unit} 可以用 \hask{pure} 来实现：
+\begin{haskell}
+unit = pure ()
+\end{haskell}
+
+因此，在笛卡尔闭范畴中，我们可以使用等价的但更方便的 \hask{Applicative} 来代替 \hask{Monoidal}：
+\begin{haskell}
+class Functor f => Applicative f where
+    pure  :: a -> f a
+    (<*>) :: f (a -> b) -> f a -> f b
+\end{haskell}
+
+\section{应用函子实例}
+
+最常见的应用函子同时也是单子（最著名的反例是\hask{ZipList}）。通常选择使用\hask{Applicative}还是\hask{Monad}语法是基于便利性，尽管在某些情况下存在性能差异——尤其是在涉及并行执行时。
+
+\subsection{部分性}
+一个\hask{Maybe}函数只有在两者都是\hask{Just}时才能应用于\hask{Maybe}参数：
+\begin{haskell}
+instance Applicative Maybe where
+  pure = Just
+  mf <*> ma = 
+    case (mf, ma) of
+      (Just f, Just a) -> Just (f a)
+      _ -> Nothing
+\end{haskell}
+
+我们可以通过定义\hask{Either}函子的版本来添加关于失败原因的信息：
+\begin{haskell}
+data Validation e a = Failure e  | Success a
+\end{haskell}
+\hask{Validation}的\hask{Applicative}实例使用\hask{mappend}累积错误：
+\begin{haskell}
+instance Monoid e => Applicative (Validation e) where
+  pure = Success
+  Failure e1 <*> Failure e2 = Failure (mappend e1 e2)
+  Failure e  <*> Success _ = Failure e
+  Success _  <*> Failure e  = Failure  e
+  Success f  <*> Success x  = Success (f x)
+\end{haskell}
+
+\subsection{日志记录}
+
+\begin{haskell}
+newtype Writer w a = Writer { runWriter :: (a, w) }
+  deriving Functor
+\end{haskell}
+
+为了使\hask{Writer}函子支持组合，我们必须能够组合记录的值，并且有一个“忽略我”的元素。这意味着日志必须是一个幺半群：
+\begin{haskell}
+instance Monoid w => Applicative (Writer w) where
+  pure a = Writer (a, mempty)
+  wf <*> wa = let (f, w)  = runWriter wf
+                  (a, w') = runWriter wa
+              in Writer (f a, mappend w w')
+\end{haskell}
+
+\subsection{环境}
+\begin{haskell}
+newtype Reader e a = Reader { runReader :: e -> a }
+  deriving Functor
+\end{haskell}
+
+由于环境是不可变的，我们并行传递给两个计算。无效果的\hask{pure}忽略环境。
+\begin{haskell}
+instance Applicative (Reader e) where
+  pure a = Reader (const a)
+  rf <*> ra = Reader (\e -> (runReader rf e) (runReader ra e))
+\end{haskell}
+
+\subsection{状态}
+\begin{haskell}
+newtype State s a = State { runState :: s -> (a, s) }
+  deriving Functor
+\end{haskell}
+
+\hask{State}应用函子展示了并行和顺序组合。两个动作是并行创建的，但它们是顺序执行的。第二个动作使用第一个动作修改后的状态：
+\begin{haskell}
+instance Applicative (State s) where
+  pure a = State (\s -> (a, s))
+  sf <*> sa = State (\s ->
+    let (f, s')  = runState sf s
+        (a, s'') = runState sa s' 
+    in (f a, s''))
+\end{haskell}
+
+\subsection{非确定性}
+列表函子有两个独立的\hask{Applicative}实例。它们对应于两种不同的列表组合方式。第一种是逐个元素压缩两个列表；第二种产生所有可能的组合。为了对同一数据类型有两个实例，我们必须将其中一个封装在\hask{newtype}中：
+\begin{haskell}
+newtype ZipList a = ZipList { unZip :: [a] }
+  deriving Functor
+\end{haskell}
+splat操作符将每个函数应用于其对应的参数。它在较短列表的末尾停止。有趣的是，如果我们希望\hask{pure}符合单位律，它必须产生一个无限列表：
+\begin{haskell}
+repeat :: a -> [a]
+repeat a = a : repeat a
+\end{haskell}
+这样，当与任何有限列表压缩时，它不会截断结果。
+\begin{haskell}
+instance Applicative ZipList where
+  pure a = ZipList (repeat a)
+  zf <*> za = ZipList (zipWith ($) (unZip zf) (unZip za))
+\end{haskell}
+两个（可能无限的）列表通过应用函数应用操作符\hask{$}组合。
+\begin{haskell}
+zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+zipWith f [] _ = []
+zipWith f _ [] = []
+zipWith f (a : as) (b : bs) = f a b : zipWith f as bs 
+\end{haskell}
+
+列表的第二个\hask{Applicative}实例将所有函数应用于所有参数。为了实现splat操作符，我们使用Haskell的\index{列表推导}列表推导语法：
+\begin{haskell}
+instance Applicative [] where
+  pure a = [a]
+  fs <*> as = [ f a | f <- fs, a <- as ]
+\end{haskell}
+\hask{[f a | f <- fs, a <- as]}的含义是：创建一个\hask{(f a)}的列表，其中\hask{f}取自列表\hask{fs}，\hask{a}取自列表\hask{as}。
+
+\subsection{延续}
+\begin{haskell}
+newtype Cont r a = Cont { runCont :: (a -> r) -> r }
+  deriving Functor
+\end{haskell}
+
+让我们为延续实现\hask{<*>}操作符。作用于一对延续
+\begin{haskell}
+kf :: Cont r (a -> b)
+ka :: Cont r a
+\end{haskell}
+它应该产生一个延续：
+\begin{haskell}
+Cont r b
+\end{haskell}
+后者接受一个处理程序\hask{k :: b -> r }，并应该用函数应用\hask{(f a)}的结果调用它。为了进行最后一次调用，我们需要提取函数和参数。为了提取\hask{a}，我们必须运行延续\hask{ka}并传递\hask{a}的消费者：
+\begin{haskell}
+runCont ka (\a -> k (f a))))
+\end{haskell}
+为了提取\hask{f}，我们必须运行延续\hask{kf}并传递\hask{f}的消费者：
+\begin{haskell}
+runCont kf (\f -> runCont ka (\a -> k (f a))))
+\end{haskell}
+总的来说，我们得到：
+\begin{haskell}
+instance Applicative (Cont r) where
+  pure a = Cont (\k -> k a)
+  kf <*> ka = Cont (\k -> 
+        runCont kf (\f -> 
+        runCont ka (\a -> k (f a))))
+\end{haskell}
+
+\subsection{输入/输出}
+
+输入/输出操作通常作为单子组合，但也可以使用应用语法。注意，尽管应用函子是并行组合的，但副作用是序列化的。这很重要，例如，如果你希望在获取用户输入之前打印提示：
+\begin{haskell}
+prompt :: String -> IO String
+prompt str = putStrLn str *> getLine
+\end{haskell}
+这里我们组合了\hask{putStrLn}（将其参数打印到终端）和\hask{getLine}（等待用户输入）。半splat操作符忽略第一个参数产生的值（在这种情况下是单位\hask{()}），但保留副作用（这里，打印字符串）：
+\begin{haskell}
+(*>) :: Applicative f => f a -> f b -> f b
+u *> v = (\ _ x -> x) <$> u <*> v
+\end{haskell}
+我们现在可以应用一个双参数函数：
+\begin{haskell}
+greeting :: String -> String -> String
+greeting s1 s2 = "Hi " ++ s1 ++ " " ++ s2 ++ "!"
+\end{haskell}
+到一对\hask{IO}参数：
+\begin{haskell}
+getNamesAndGreet :: IO String
+getNamesAndGreet = 
+    greeting <$> prompt "First name: " <*> prompt "Last name: "
+\end{haskell}
+
+\subsection{解析器}
+
+解析是一种高度可分解的活动。有许多领域特定语言可以使用应用解析器（而不是更强大的单子解析器）进行解析。
+
+解析器可以描述为接受字符（或标记）字符串的函数。解析可能失败，因此结果是\hask{Maybe}。成功的解析器返回解析值以及未消耗的输入字符串部分：
+\begin{haskell}
+newtype Parser a = 
+  Parser { parse :: String -> Maybe (a, String) }
+\end{haskell}
+例如，这是一个检测数字的简单解析器：
+\begin{haskell}
+digit :: Parser Char
+digit = Parser (\s -> case s of
+    (c:cs) | isDigit c -> Just (c, cs)
+    _                  -> Nothing)
+\end{haskell}
+解析器的\hask{Applicative}实例将部分性与状态结合起来：
+\begin{haskell}
+instance Applicative Parser where
+  pure a = Parser (\s -> Just (a, s))
+  pf <*> pa = Parser (\s ->
+    case parse pf s of
+      Nothing      -> Nothing
+      Just (f, s') -> case parse pa s' of
+          Nothing       -> Nothing
+          Just (a, s'') -> Just (f a, s''))
+\end{haskell}
+
+大多数语法包含替代项，例如，标识符或数字；if语句或循环等。这可以通过\hask{Applicative}的以下\index{\hask{Alternative}}子类捕获：
+\begin{haskell}
+class Applicative f => Alternative f where
+  empty :: f a
+  (<|>) :: f a -> f a -> f a
+\end{haskell}
+这表明，无论类型\hask{a}是什么，类型\hask{(f a)}都是一个幺半群。
+
+\hask{Parser}的\hask{Alternative}实例尝试第一个解析器，如果失败，则尝试第二个。幺半群单位是一个总是失败的解析器。
+\begin{haskell}
+instance Alternative Parser where
+  empty = Parser (\s -> Nothing)
+  pa <|> pb = Parser (\s ->
+    case parse pa s of
+      Just as -> Just as
+      Nothing -> parse pb s)
+ \end{haskell}
+ 如果我们使用\hask{Maybe}的\hask{Alternative}实例，这可以简化：
+\begin{haskell}
+  pa <|> pb = Parser (\s -> parse pa s <|> parse pb s)
+ \end{haskell}
+ 拥有\hask{Applicative}超类允许我们链式替代项。我们可以使用\hask{some}来解析一个或多个项目：
+\begin{haskell}
+some :: f a -> f [a] 
+some pa = (:) <$> pa <*> many pa
+\end{haskell}
+和\hask{many}来解析零个或多个项目：
+\begin{haskell}
+many :: f a -> f [a]
+many pa = some pa <|> pure []
+\end{haskell}
+
+\begin{exercise}
+实现\hask{Maybe}的\hask{Alternative}实例。提示：如果第一个参数是失败，尝试第二个。
+\end{exercise}
+
+\subsection{并发和并行}
+
+启动线程是一个I/O操作，因此任何并发或并行执行本质上都是有副作用的。计算是并行还是串行执行取决于它们的组合方式。并行性是通过应用组合实现的。
+
+\hask{Concurrently}函子是一个用于并行操作的\hask{Applicative}示例。它接受一个\hask{IO}操作并在单独的线程中开始执行它。然后使用应用组合来组合结果——这里，通过添加两个整数：
+\begin{haskell}
+f :: Concurrently Int
+f = (+) <$> Concurrently (fileChars "1-Types.hs") 
+        <*> Concurrently (fileChars "2-Composition.hs")
+    where fileChars path = length <$> readFile path
+\end{haskell}
+
+\subsection{Do Notation}
+在范畴论中，我们以图的方式组合箭头。我们可以将它们串联或并联，并且不需要为中间对象的元素命名。这样的图可以直接翻译为编程，产生用于串联组合的无点符号和用于并行组合的应用符号。然而，命名中间结果通常很方便。这可以使用\hask{do}符号完成。例如，并发示例可以重写为：
+\begin{haskell}
+{-# language ApplicativeDo #-}
+f :: Concurrently Int
+f = do
+      m <- Concurrently (fileChars "1-Types.hs")
+      n <- Concurrently (fileChars "2-Composition.hs")
+      pure (m + n)
+  where fileChars path = length <$> readFile path
+\end{haskell}
+
+我们将在关于单子的章节中更多地讨论do符号。现在，重要的是要知道，当你使用语言编译指示\hask{ApplicativeDo}时，编译器默认会尝试在do块的翻译中使用应用组合。如果不可能，它将回退到单子组合。
+
+\subsection{应用函子的组合}
+
+应用函子的一个很好的特性是它们的函子组合再次是一个应用函子：
+\begin{haskell}
+instance (Applicative f, Applicative g) => 
+  Applicative (Compose g f) where
+    pure :: a -> Compose g f a
+    pure x = Compose (pure (pure x))
+    (<*>) :: Compose g f (a -> b) -> Compose g f a -> Compose g f b
+    Compose gff <*> Compose gfa = Compose (fmap (<*>) gff <*> gfa)
+\end{haskell}
+我们稍后会看到，单子并非如此：两个单子的组合通常不是单子。
+
+\section{范畴论中的幺半函子}
+
+我们已经看到了几个幺半范畴（monoidal category）的例子。这类范畴配备了某种二元运算，例如笛卡尔积、和、复合（在自函子范畴中）等。它们还有一个特殊对象，作为该二元运算的单位元。单位元和结合律要么严格满足（在严格幺半范畴中），要么在同构意义下满足。
+
+每当我们有多个某种结构的实例时，我们可能会问自己一个问题：是否存在一个由这些事物构成的完整范畴？在这种情况下：幺半范畴能否形成它们自己的范畴？为此，我们必须定义幺半范畴之间的箭头。
+
+一个从幺半范畴 $(\mathcal{C}, \otimes, i)$ 到另一个幺半范畴 $(\mathcal{D}, \oplus, j)$ 的\emph{幺半函子}（monoidal functor）$F$ 将张量积映射到张量积，单位元映射到单位元——所有这些都在同构意义下成立：
+\begin{align*}
+F a \oplus F b &\cong F (a \otimes b) \\
+j &\cong F i 
+\end{align*}
+这里，左边是目标范畴中的张量积和单位元，右边是源范畴中的对应物。
+
+如果所讨论的两个幺半范畴不是严格的，即单位元和结合律仅在同构意义下满足，那么还需要额外的相干性条件，以确保单位元映射到单位元，结合子映射到结合子。
+
+以幺半函子为箭头的幺半范畴的范畴称为 $\mathbf{MonCat}$。实际上，它是一个2-范畴，因为可以定义幺半函子之间的结构保持自然变换。
+
+\subsection{松弛幺半函子}
+
+幺半范畴的一个优点是可以让我们定义幺半群（monoid）。你可以很容易地确信，幺半函子将幺半群映射到幺半群。事实证明，你不需要幺半函子的全部功能来实现这一点。让我们考虑一个函子将幺半群映射到幺半群所需的最小条件。
+
+让我们从幺半范畴 $(\mathcal{C}, \otimes, i)$ 中的一个幺半群 $(m, \mu, \eta)$ 开始。考虑一个将 $m$ 映射到 $F m$ 的函子 $F$。我们希望 $F m$ 成为目标幺半范畴 $(\mathcal{D}, \oplus, j)$ 中的一个幺半群。为此，我们需要找到两个映射：
+\begin{align*}
+\eta' &\colon j \to F m \\
+ \mu' &\colon F m \oplus F m \to F m 
+\end{align*}
+满足幺半群定律。
+
+由于 $m$ 是一个幺半群，我们确实可以利用原始映射的提升：
+\begin{align*}
+ F \eta &\colon F i \to F m \\
+ F \mu &\colon F (m \otimes m) \to F m
+\end{align*}
+
+为了实现 $\eta'$ 和 $\mu'$，我们缺少的是两个额外的箭头：
+\begin{align*}
+j &\to F i\\
+ F m \oplus F m &\to F (m \otimes m)
+ \end{align*}
+一个幺半函子会提供这样的箭头。然而，对于我们试图实现的目标，我们不需要这些箭头是可逆的。
+
+一个\emph{松弛幺半函子}（lax monoidal functor）是一个配备了一个态射 $\phi_i$ 和一个自然变换 $\phi_{ab}$ 的函子：
+\begin{align*}
+\phi_i &\colon j \to F i \\
+\phi_{a b} &\colon F a \oplus F b \to F (a \otimes b)
+\end{align*}
+满足适当的单位性和结合性条件。
+
+这样的函子将幺半群 $(m, \mu, \eta)$ 映射到幺半群 $(F m, \mu', \eta')$，其中：
+\begin{align*}
+\eta' &= F \eta \circ \phi_i \\
+\mu' &= F \mu \circ \phi_{a b}
+\end{align*}
+
+在 Haskell 中，我们将 \hask{Monoidal} 函子视为一个松弛幺半自函子的例子，它保留了笛卡尔积。
+
+\subsection{函子强度}
+
+函子与幺半结构交互的另一种方式，在我们编程时隐藏得很明显。我们理所当然地认为函数可以访问环境。这样的函数称为闭包（closure）。
+
+例如，这里有一个函数从环境中捕获变量 \hask{a} 并将其与其参数配对：
+\begin{haskell}
+\x -> (a, x)
+\end{haskell}
+这个定义单独来看没有意义，但当环境中包含变量 \hask{a} 时，它就有意义了，例如：
+\begin{haskell}
+pairWith :: Int -> (String -> (Int, String))
+pairWith a = \x -> (a, x)
+\end{haskell}
+调用 \hask{pairWith 5} 返回的函数从其环境中“捕获”了 5。
+
+现在考虑以下修改，它返回一个包含闭包的单例列表：
+\begin{haskell}
+pairWith' :: Int -> [String -> (Int, String)]
+pairWith' a = [\x -> (a, x)]
+\end{haskell}
+作为程序员，如果这不起作用，你会非常惊讶。但我们在这里做的事情非常不平凡：我们正在将环境“偷运”到列表函子下。根据我们的 lambda 演算模型，闭包是从环境和函数参数的乘积到结果的态射。这里的 lambda，实际上是 \hask{(Int, String)} 的函数，定义在列表函子内部，但它捕获了在列表\emph{外部}定义的 \hask{a}。
+
+让我们将环境偷运到函子下的属性称为\index{强度，函子}\emph{函子强度}（functorial strength）或\emph{张量强度}（tensorial strength），可以在 Haskell 中实现为：
+\begin{haskell}
+strength :: Functor f => (e, f a) -> f (e, a)
+strength (e, as) = fmap (e, ) as
+\end{haskell}
+符号 \hask{(e, )} 称为\index{元组部分}\emph{元组部分}（tuple section），等价于对构造函数的部分应用：\hask{(,) e}。
+
+在范畴论中，自函子 $F$ 的强度被定义为一个将张量积偷运到函子中的自然变换：
+\[ \sigma \colon a \otimes F(b) \to F (a \otimes b) \]
+还有一些额外的条件，确保它与所讨论的幺半范畴的单位元和结合子良好地配合。
+
+我们能够为任意函子实现 \hask{strength} 的事实意味着，在 Haskell 中，每个函子都是强的。这就是为什么我们不必担心从函子内部访问环境的原因。
+
+然而，在范畴论中，并非幺半范畴中的每个自函子都是强的。目前，我们的魔法咒语是我们正在使用的范畴是自丰富的（self-enriched），并且在 Haskell 中定义的每个自函子都是丰富的。当我们讨论丰富范畴时，我们会回到这一点。在 Haskell 中，强度归结为我们总是可以 \hask{fmap} 一个部分应用的元组构造函数 \hask{(a, )}。
+
+\subsection{闭函子}
+
+如果你眯着眼睛看 splat 操作符的定义：
+\begin{haskell}
+(<*>) :: f (a -> b) -> (f a -> f b)
+\end{haskell}
+你可能会将其视为将函数对象映射到函数对象。
+
+如果你考虑两个闭范畴之间的函子，这一点会变得更加清晰。你可以从源范畴中的函数对象 $b^a$ 开始，并对其应用函子 $F$：
+\[ F (b^a) \]
+或者，你可以映射两个对象 $a$ 和 $b$，并在目标范畴中构造它们之间的函数对象：
+\[ (F b)^{F a} \]
+如果我们要求这两种方式同构，我们就得到了严格\emph{闭函子}（closed functor）的定义。但是，就像幺半函子的情况一样，我们更感兴趣的是松弛版本，它配备了一个单向自然变换：
+\[ F (b^a) \to (F b)^{F a} \]
+如果 $F$ 是一个自函子，这直接转化为 splat 操作符的定义。
+
+松弛闭函子的完整定义包括幺半单位元的映射和一些相干性条件。综上所述，应用函子（applicative functor）就是一个松弛闭函子。
+
+\end{document}
