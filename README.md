@@ -26,6 +26,6 @@
 
 ## 翻译进度
 
-✅ 全书翻译已完成！中文版本的 PDF 文件 `DaoFP_ZH.pdf` 位于项目根目录下，可以直接下载使用。
+✅ 全书翻译已完成！中文版本的 PDF 文件 [DaoFP.pdf](https://github.com/binesiyu/DaoFpZH/blob/master/DaoFP.pdf) 位于项目根目录下，可以直接下载使用。
 
 欢迎阅读并提供反馈，帮助我们进一步改进翻译质量。如果您发现任何问题或有改进建议，欢迎提交 Issue 和 Pull Request。
